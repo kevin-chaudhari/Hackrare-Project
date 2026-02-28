@@ -1,0 +1,111 @@
+# ─────────────────────────────────────────
+# 🔐 Environment & Secrets
+# ─────────────────────────────────────────
+.env
+.env.*
+env.example
+*.env
+.env.local
+.env.development
+.env.production
+
+# Prevent accidental API key commits
+*.pem
+*.key
+*.crt
+
+# ─────────────────────────────────────────
+# 🐍 Python
+# ─────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Coverage / Testing
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# ─────────────────────────────────────────
+# 🗄 Database
+# ─────────────────────────────────────────
+*.db
+*.sqlite3
+*.sqlite
+*.log
+
+# Alembic (if added later)
+alembic/versions/*.pyc
+
+# ─────────────────────────────────────────
+# ⚛️ React / Node
+# ─────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# React build output
+build/
+dist/
+
+# ─────────────────────────────────────────
+# 🐳 Docker
+# ─────────────────────────────────────────
+.docker/
+docker-compose.override.yml
+
+# ─────────────────────────────────────────
+# 🧠 ML / AI Artifacts
+# ─────────────────────────────────────────
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.onnx
+*.joblib
+*.pkl
+
+# Large data files
+data/
+datasets/
+*.csv
+*.parquet
+
+# ─────────────────────────────────────────
+# 🖥 IDE / Editor
+# ─────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.iml
+
+# ─────────────────────────────────────────
+# 🖥 OS Files
+# ─────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ─────────────────────────────────────────
+# Logs
+# ─────────────────────────────────────────
+*.log
+logs/
