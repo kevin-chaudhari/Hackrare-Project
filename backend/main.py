@@ -61,7 +61,9 @@ app = FastAPI(
 # ─── CORS Configuration ─────────────────────────────────────────────
 
 origins = [
-    "http://localhost:3000",  # React dev server
+    "http://localhost:3000",                         # React dev server
+    "https://hackrare-project.vercel.app",           # Vercel production
+    "https://hackrare-project-*.vercel.app",         # Vercel preview deployments
 ]
 
 app.add_middleware(
