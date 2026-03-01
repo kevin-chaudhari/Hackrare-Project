@@ -334,6 +334,7 @@ def generate_structured_summary(
     fis = signals.get("functional_impact", {})
     missingness = signals.get("missingness", {})
     red_flags = signals.get("red_flags", [])
+    context_statement = signals.get("context_statement")
 
     from backend.disease_config import DISEASE_CONFIGS
     hpo_mapping = DISEASE_CONFIGS.get(disease, {}).get("hpo_terms", {})
@@ -381,6 +382,8 @@ def generate_structured_summary(
         )
     else:
         trigger_statement = "No statistically significant trigger associations detected."
+    if context_statement:
+        trigger_statement = f"{trigger_statement} {context_statement}"
 
     # ── Functional Impact
     functional_impact_statement = (

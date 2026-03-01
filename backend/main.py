@@ -1,6 +1,8 @@
 # main.py — RareSignal AI FastAPI backend
 import json
 import uuid
+import random
+import math
 from datetime import datetime, timedelta
 from typing import List, Optional
 from contextlib import asynccontextmanager
@@ -9,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from backend.database import init_db, get_db, Patient, SymptomEntry, BaselineProfile, ComputedSignal, FunctionalScore, Alert
+from backend.database import init_db, get_db, Patient, SymptomEntry, BaselineProfile, ComputedSignal, FunctionalScore, Alert, SensorStream
 from backend.schemas import (
     PatientCreate, PatientResponse,
     SymptomEntryCreate, SymptomEntryResponse,
@@ -19,7 +21,8 @@ from backend.schemas import (
     DetailedReportRequest, DetailedReportResponse,
     HPOMatchRequest, HPOMatchResponse, HPOMatchResult,
     FlareAlertResponse,
-    PatientHistoryResponse, SignalHistoryPoint
+    PatientHistoryResponse, SignalHistoryPoint,
+    SensorStreamSummaryResponse
 )
 from backend.signal_engine import (
     compute_all_signals, update_ewma_baseline, initialize_baseline_from_history
@@ -83,6 +86,7 @@ def _entries_to_dicts(entries: List[SymptomEntry]) -> List[dict]:
         "timestamp": e.timestamp,
         "symptoms": e.symptoms,
         "triggers": e.triggers,
+        "lifestyle_context": e.lifestyle_context,
         "notes": e.notes
     } for e in entries]
 
@@ -122,6 +126,347 @@ def _update_baseline_from_entry(baseline: BaselineProfile, symptoms: dict, db: S
     db.commit()
 
 
+AUTONOMIC_DISEASES = {"POTS", "EDS", "ENS", "FXS", "HD", "PKU", "NF1", "PRION"}
+RESPIRATORY_DISEASES = {"PCD", "CF", "Heterotaxy", "RRP", "SMA", "Pompe", "TS", "RTT"}
+INFLAMMATORY_DISEASES = {"FMF", "Gaucher", "WD", "Alkaptonuria"}
+CARDIOVASCULAR_DISEASES = {"MFS", "Heterotaxy", "POTS"}
+
+
+def _relevant_lifestyle_keys_for_disease(disease: str) -> List[str]:
+    if disease in AUTONOMIC_DISEASES:
+        return [
+            "sleep_duration_hours", "sleep_disruption", "mentally_demanding_day",
+            "overexertion", "activity_worsened_symptoms", "hydration_level",
+            "heat_exposure"
+        ]
+    if disease in RESPIRATORY_DISEASES:
+        return [
+            "sleep_duration_hours", "sleep_disruption", "activity_level",
+            "overexertion", "activity_worsened_symptoms", "cold_exposure",
+            "heat_exposure", "illness_symptoms", "travel_or_routine_change"
+        ]
+    if disease in INFLAMMATORY_DISEASES:
+        return [
+            "sleep_duration_hours", "sleep_disruption", "mentally_demanding_day",
+            "hydration_level", "large_or_unusual_meals", "missed_meals",
+            "illness_symptoms", "cold_exposure"
+        ]
+    if disease in CARDIOVASCULAR_DISEASES:
+        return [
+            "sleep_duration_hours", "sleep_disruption", "activity_level",
+            "overexertion", "activity_worsened_symptoms", "hydration_level",
+            "heat_exposure"
+        ]
+    return [
+        "sleep_duration_hours", "sleep_disruption", "activity_level",
+        "mentally_demanding_day", "hydration_level", "illness_symptoms"
+    ]
+
+
+def _label_for_feature(feature_key: str, config: dict) -> str:
+    symptom_labels = config.get("symptom_labels", {})
+    lifestyle_labels = {
+        "sleep_duration_hours": "Sleep duration",
+        "sleep_disruption": "Sleep disruption",
+        "activity_level": "Activity level",
+        "overexertion": "Overexertion",
+        "activity_worsened_symptoms": "Activity worsened symptoms",
+        "mentally_demanding_day": "Mentally demanding day",
+        "hydration_level": "Hydration level",
+        "large_or_unusual_meals": "Large or unusual meals",
+        "missed_meals": "Missed meals",
+        "heat_exposure": "Heat exposure",
+        "cold_exposure": "Cold exposure",
+        "illness_symptoms": "Illness symptoms",
+        "travel_or_routine_change": "Travel or routine change",
+        "emotional_strain_note": "Emotional strain",
+    }
+    if feature_key in symptom_labels:
+        return symptom_labels[feature_key]
+    if feature_key in lifestyle_labels:
+        return lifestyle_labels[feature_key]
+    return feature_key.replace("_", " ").title()
+
+
+def _lifestyle_factor_score(key: str, value) -> float:
+    if value is None:
+        return 0.0
+    if key == "sleep_duration_hours":
+        hours = float(value)
+        if hours < 5:
+            return 1.0
+        if hours < 6.5:
+            return 0.65
+        if hours > 10:
+            return 0.3
+        return 0.0
+    if isinstance(value, str):
+        if value == "yes":
+            return 1.0
+        if value == "unsure":
+            return 0.35
+        if value == "high":
+            return 0.8
+        if value == "moderate":
+            return 0.35
+        if value == "low":
+            return 0.6 if key == "hydration_level" else 0.0
+        if value == "adequate":
+            return 0.0
+        if value == "no":
+            return 0.0
+    return 0.0
+
+
+def _softmax_probability_map(scores: dict) -> dict:
+    exp_values = {k: math.exp(v) for k, v in scores.items()}
+    total = sum(exp_values.values()) or 1.0
+    return {k: round(v / total, 4) for k, v in exp_values.items()}
+
+
+def _compute_disease_aware_risk(patient: Patient, latest_entry: SymptomEntry, latest_signal: ComputedSignal, latest_fis: Optional[FunctionalScore]) -> dict:
+    config = DISEASE_CONFIGS.get(patient.disease, {})
+    all_symptoms = config.get("symptoms", [])
+    primary_symptoms = [s for s in all_symptoms if s not in {"sleep_quality", "stress_symptom_severity"}][:5]
+    relevant_symptoms = primary_symptoms + [s for s in ["sleep_quality", "stress_symptom_severity"] if s in all_symptoms]
+    relevant_triggers = list(config.get("triggers", []))
+    relevant_lifestyle_keys = _relevant_lifestyle_keys_for_disease(patient.disease)
+
+    z_scores = latest_signal.z_scores or {}
+    symptom_contribs = []
+    for sym in relevant_symptoms:
+        z_val = z_scores.get(sym)
+        if z_val is None:
+            continue
+        contribution = max(0.0, min(abs(float(z_val)) / 3.0, 1.2))
+        if contribution > 0:
+            symptom_contribs.append({
+                "feature": _label_for_feature(sym, config),
+                "importance": round(min(contribution, 1.0), 3),
+                "direction": "+" if float(z_val) >= 0 else "-"
+            })
+
+    active_triggers = [t for t in latest_entry.triggers if t in relevant_triggers]
+    trigger_contribs = [{
+        "feature": _label_for_feature(trigger, config),
+        "importance": 0.18,
+        "direction": "+"
+    } for trigger in active_triggers]
+
+    lifestyle_context = latest_entry.lifestyle_context or {}
+    lifestyle_contribs = []
+    for key in relevant_lifestyle_keys:
+        score = _lifestyle_factor_score(key, lifestyle_context.get(key))
+        if score <= 0:
+            continue
+        lifestyle_contribs.append({
+            "feature": _label_for_feature(key, config),
+            "importance": round(min(score * 0.35, 1.0), 3),
+            "direction": "+"
+        })
+
+    symptom_pressure = min(1.0, sum(item["importance"] for item in symptom_contribs) / max(len(relevant_symptoms), 1) * 1.4)
+    trigger_pressure = min(1.0, len(active_triggers) / max(3, len(relevant_triggers) or 1))
+    lifestyle_pressure = min(1.0, sum(item["importance"] for item in lifestyle_contribs))
+    volatility_pressure = min(1.0, (latest_signal.volatility_index or 0.0) / 0.9)
+    fis_pressure = min(1.0, (latest_fis.fis_composite if latest_fis else 0.0) / 0.85)
+    red_flag_pressure = 1.0 if latest_signal.risk_category == "CRITICAL" else 0.0
+
+    composite_pressure = (
+        symptom_pressure * 0.42 +
+        trigger_pressure * 0.14 +
+        lifestyle_pressure * 0.18 +
+        volatility_pressure * 0.14 +
+        fis_pressure * 0.12
+    )
+    composite_pressure = min(1.3, composite_pressure + red_flag_pressure * 0.35)
+
+    scores = {
+        "LOW": 2.4 - (composite_pressure * 3.2),
+        "MODERATE": 0.9 + (composite_pressure * 1.6) - abs(composite_pressure - 0.45),
+        "HIGH": (composite_pressure * 2.4) - 0.5,
+        "CRITICAL": (composite_pressure * 3.0) - 1.8 + red_flag_pressure
+    }
+    probs = _softmax_probability_map(scores)
+    risk_category = max(probs.items(), key=lambda item: item[1])[0]
+
+    ranked_features = sorted(
+        symptom_contribs + trigger_contribs + lifestyle_contribs,
+        key=lambda item: item["importance"],
+        reverse=True
+    )[:5]
+    if not ranked_features:
+        ranked_features = [{
+            "feature": "Recent disease-specific inputs",
+            "importance": round(composite_pressure, 3),
+            "direction": "+"
+        }]
+
+    context_labels = [item["feature"] for item in lifestyle_contribs[:3] + trigger_contribs[:2]]
+    if context_labels:
+        context_statement = (
+            "Relevant recent context for this disease included "
+            + ", ".join(context_labels)
+            + ". These factors are shown as associative context and not as causes."
+        )
+    else:
+        context_statement = "No major disease-relevant lifestyle or trigger factors were prominent in the latest check-in."
+
+    return {
+        "risk_category": risk_category,
+        "risk_probabilities": probs,
+        "top_contributing_features": ranked_features,
+        "context_statement": context_statement,
+        "composite_pressure": composite_pressure,
+    }
+
+
+def _sensor_modifiers_for_disease(disease: str) -> dict:
+    return {
+        "POTS": {"hr_shift": 9, "hrv_shift": -10, "spo2_shift": -0.2, "stress_shift": 10},
+        "PCD": {"hr_shift": 4, "hrv_shift": -6, "spo2_shift": -1.2, "stress_shift": 8},
+        "Heterotaxy": {"hr_shift": 5, "hrv_shift": -8, "spo2_shift": -1.8, "stress_shift": 9},
+        "ENS": {"hr_shift": 2, "hrv_shift": -3, "spo2_shift": 0.0, "stress_shift": 7},
+        "EDS": {"hr_shift": 4, "hrv_shift": -5, "spo2_shift": -0.1, "stress_shift": 6},
+        "FMF": {"hr_shift": 6, "hrv_shift": -7, "spo2_shift": -0.1, "stress_shift": 9},
+        "CF": {"hr_shift": 6, "hrv_shift": -6, "spo2_shift": -1.5, "stress_shift": 8},
+        "HD": {"hr_shift": 3, "hrv_shift": -8, "spo2_shift": -0.1, "stress_shift": 9},
+        "RTT": {"hr_shift": 5, "hrv_shift": -7, "spo2_shift": -1.0, "stress_shift": 9},
+        "MFS": {"hr_shift": 6, "hrv_shift": -5, "spo2_shift": -0.3, "stress_shift": 7},
+        "SMA": {"hr_shift": 4, "hrv_shift": -6, "spo2_shift": -1.1, "stress_shift": 7},
+        "FXS": {"hr_shift": 3, "hrv_shift": -9, "spo2_shift": 0.0, "stress_shift": 11},
+        "NF1": {"hr_shift": 3, "hrv_shift": -5, "spo2_shift": -0.1, "stress_shift": 8},
+        "PKU": {"hr_shift": 2, "hrv_shift": -6, "spo2_shift": 0.0, "stress_shift": 8},
+        "WD": {"hr_shift": 5, "hrv_shift": -7, "spo2_shift": -0.2, "stress_shift": 8},
+        "Pompe": {"hr_shift": 5, "hrv_shift": -6, "spo2_shift": -0.9, "stress_shift": 7},
+        "TS": {"hr_shift": 4, "hrv_shift": -7, "spo2_shift": -1.1, "stress_shift": 8},
+        "Gaucher": {"hr_shift": 4, "hrv_shift": -5, "spo2_shift": -0.2, "stress_shift": 7},
+        "Alkaptonuria": {"hr_shift": 3, "hrv_shift": -5, "spo2_shift": -0.1, "stress_shift": 7},
+        "Achondroplasia": {"hr_shift": 4, "hrv_shift": -4, "spo2_shift": -0.8, "stress_shift": 6},
+        "RRP": {"hr_shift": 5, "hrv_shift": -5, "spo2_shift": -1.0, "stress_shift": 8},
+        "PRION": {"hr_shift": 6, "hrv_shift": -10, "spo2_shift": -0.6, "stress_shift": 11},
+    }.get(disease, {"hr_shift": 3, "hrv_shift": -4, "spo2_shift": -0.2, "stress_shift": 5})
+
+
+def _build_sensor_insights(disease: str, metrics: dict) -> tuple[list, list]:
+    insights = []
+    alerts = []
+
+    autonomic_diseases = {"POTS", "EDS", "ENS", "FXS", "HD", "PKU", "NF1", "PRION"}
+    respiratory_diseases = {"PCD", "CF", "Heterotaxy", "RRP", "SMA", "Pompe", "TS", "RTT"}
+    inflammatory_diseases = {"FMF", "Gaucher", "WD", "Alkaptonuria"}
+    cardiovascular_diseases = {"MFS", "Heterotaxy", "POTS"}
+
+    if disease in autonomic_diseases:
+        if metrics["hrv_rmssd"] <= 24:
+            insights.append("Autonomic recovery markers were suppressed, with lower HRV suggesting higher nervous-system strain.")
+            alerts.append("Autonomic stress pattern detected")
+        else:
+            insights.append("Autonomic variability stayed in a moderate range, without marked suppression in HRV.")
+        if metrics["stress_load"] >= 70:
+            insights.append("Wearable stress load remained elevated, which may align with symptom-triggering autonomic burden.")
+            alerts.append("High autonomic stress load")
+
+    if disease in respiratory_diseases:
+        if metrics["spo2_avg"] is not None and metrics["spo2_avg"] < 95:
+            insights.append("Oxygen saturation trended below the preferred range, which is relevant for respiratory burden tracking.")
+            alerts.append("Respiratory oxygen variability detected")
+        else:
+            insights.append("Oxygen saturation remained relatively stable through the replayed respiratory monitoring window.")
+        if metrics["heart_rate_avg"] >= 90:
+            insights.append("Average heart rate rose alongside the respiratory profile, which can indicate higher breathing effort.")
+
+    if disease in inflammatory_diseases:
+        if metrics["skin_temp_avg"] >= 37.0:
+            insights.append("Skin temperature trended above the expected wearable baseline, which can correlate with inflammatory or flare activity.")
+            alerts.append("Temperature elevation detected")
+        else:
+            insights.append("Skin temperature stayed close to the expected wearable baseline during this replay window.")
+        if metrics["stress_load"] >= 68:
+            insights.append("Stress load and recovery imbalance may reflect physiologic strain during an inflammatory-heavy day.")
+
+    if disease in cardiovascular_diseases:
+        if metrics["heart_rate_avg"] >= 92:
+            insights.append("Average heart rate remained elevated over the replay window, suggesting higher cardiovascular strain.")
+            alerts.append("Elevated cardiovascular load")
+        else:
+            insights.append("Average heart rate stayed near the expected wearable baseline for this cardiovascular profile.")
+        if metrics["heart_rate_max"] >= 120:
+            insights.append("Peak heart-rate excursions were notable and may be relevant to symptom flare review.")
+
+    if disease not in autonomic_diseases | respiratory_diseases | inflammatory_diseases | cardiovascular_diseases:
+        if metrics["activity_load"] >= 75 and metrics["recovery_score"] <= 45:
+            insights.append("Activity burden exceeded recovery capacity, which may align with fatigue-heavy or mobility-limited days.")
+            alerts.append("Recovery mismatch after activity")
+        else:
+            insights.append("Activity and recovery stayed in a moderate range during the replayed monitoring window.")
+        if metrics["heart_rate_avg"] >= 90:
+            insights.append("Average heart rate was mildly elevated compared with the expected wearable baseline.")
+
+    if not alerts:
+        alerts.append("No critical wearable-derived alerts detected")
+
+    return insights, alerts
+
+
+def _create_sensor_stream_record(patient: Patient, db: Session, existing_stream: Optional[SensorStream] = None) -> SensorStream:
+    seed = f"{patient.id}:{patient.disease}:{patient.wearable_device_type or 'generic'}"
+    rng = random.Random(seed)
+    mods = _sensor_modifiers_for_disease(patient.disease)
+
+    heart_rate_avg = round(78 + mods["hr_shift"] + rng.uniform(-4, 6), 1)
+    heart_rate_resting = round(max(52, heart_rate_avg - rng.uniform(10, 18)), 1)
+    heart_rate_max = round(heart_rate_avg + rng.uniform(22, 48), 1)
+    hrv_rmssd = round(max(10, 34 + mods["hrv_shift"] + rng.uniform(-7, 7)), 1)
+    spo2_avg = round(min(99.0, max(90.0, 97.2 + mods["spo2_shift"] + rng.uniform(-1.2, 0.6))), 1)
+    skin_temp_avg = round(36.6 + rng.uniform(-0.4, 0.8), 1)
+    activity_load = round(min(100.0, max(10.0, 52 + rng.uniform(-18, 28))), 1)
+    recovery_score = round(min(100.0, max(5.0, 58 + rng.uniform(-20, 18) - (mods["stress_shift"] * 0.6))), 1)
+    stress_load = round(min(100.0, max(5.0, 44 + mods["stress_shift"] + rng.uniform(-10, 18))), 1)
+
+    signal_quality = "GOOD"
+    if hrv_rmssd <= 18 or spo2_avg <= 93:
+        signal_quality = "REVIEW"
+    elif stress_load >= 78:
+        signal_quality = "WATCH"
+
+    metrics = {
+        "heart_rate_avg": heart_rate_avg,
+        "heart_rate_resting": heart_rate_resting,
+        "heart_rate_max": heart_rate_max,
+        "hrv_rmssd": hrv_rmssd,
+        "spo2_avg": spo2_avg,
+        "skin_temp_avg": skin_temp_avg,
+        "activity_load": activity_load,
+        "recovery_score": recovery_score,
+        "stress_load": stress_load,
+    }
+    insights, alerts = _build_sensor_insights(patient.disease, metrics)
+
+    stream = existing_stream or SensorStream(patient_id=patient.id)
+    stream.source = "simulated_replay"
+    stream.recorded_at = datetime.utcnow()
+    stream.sample_count = 1440
+    stream.duration_minutes = 24 * 60
+    stream.heart_rate_avg = heart_rate_avg
+    stream.heart_rate_resting = heart_rate_resting
+    stream.heart_rate_max = heart_rate_max
+    stream.hrv_rmssd = hrv_rmssd
+    stream.spo2_avg = spo2_avg
+    stream.skin_temp_avg = skin_temp_avg
+    stream.activity_load = activity_load
+    stream.recovery_score = recovery_score
+    stream.stress_load = stress_load
+    stream.signal_quality = signal_quality
+    stream.insights_json = json.dumps(insights)
+    stream.alerts_json = json.dumps(alerts)
+    if existing_stream is None:
+        db.add(stream)
+    db.commit()
+    db.refresh(stream)
+    return stream
+
+
 # ─── Patients ──────────────────────────────────────────────────────────────────
 
 @app.post("/patients", response_model=PatientResponse, tags=["Patients"])
@@ -131,13 +476,21 @@ def create_patient(body: PatientCreate, db: Session = Depends(get_db)):
     existing = db.query(Patient).filter(Patient.id == body.id).first()
     if existing:
         raise HTTPException(409, f"Patient '{body.id}' already exists")
-    patient = Patient(id=body.id, disease=body.disease)
+    patient = Patient(
+        id=body.id,
+        disease=body.disease,
+        uses_wearable=body.uses_wearable,
+        wearable_device_type=body.wearable_device_type,
+        wants_wearable_link=body.wants_wearable_link
+    )
     db.add(patient)
     # Initialize baseline profile
     baseline = BaselineProfile(patient_id=body.id, mu_json="{}", sigma_json="{}")
     db.add(baseline)
     db.commit()
     db.refresh(patient)
+    if patient.uses_wearable and patient.wants_wearable_link:
+        _create_sensor_stream_record(patient, db)
     return patient
 
 
@@ -151,18 +504,72 @@ def list_patients(db: Session = Depends(get_db)):
     return db.query(Patient).all()
 
 
+@app.get("/patients/{patient_id}/sensor-summary", response_model=SensorStreamSummaryResponse, tags=["Sensors"])
+def get_sensor_summary(patient_id: str, db: Session = Depends(get_db)):
+    patient = _get_patient_or_404(patient_id, db)
+    if not patient.uses_wearable or not patient.wants_wearable_link:
+        return SensorStreamSummaryResponse(
+            patient_id=patient_id,
+            linked=False,
+            device_type=patient.wearable_device_type,
+            insights=[],
+            alerts=[]
+        )
+
+    stream = (
+        db.query(SensorStream)
+        .filter(SensorStream.patient_id == patient_id)
+        .order_by(SensorStream.recorded_at.desc())
+        .first()
+    )
+    if not stream:
+        stream = _create_sensor_stream_record(patient, db)
+    else:
+        stream = _create_sensor_stream_record(patient, db, existing_stream=stream)
+
+    return SensorStreamSummaryResponse(
+        patient_id=patient_id,
+        linked=True,
+        device_type=patient.wearable_device_type,
+        stream_source=stream.source,
+        collected_at=stream.recorded_at,
+        sample_count=stream.sample_count,
+        duration_minutes=stream.duration_minutes,
+        heart_rate_avg=stream.heart_rate_avg,
+        heart_rate_resting=stream.heart_rate_resting,
+        heart_rate_max=stream.heart_rate_max,
+        hrv_rmssd=stream.hrv_rmssd,
+        spo2_avg=stream.spo2_avg,
+        skin_temp_avg=stream.skin_temp_avg,
+        activity_load=stream.activity_load,
+        recovery_score=stream.recovery_score,
+        stress_load=stream.stress_load,
+        signal_quality=stream.signal_quality,
+        insights=stream.insights,
+        alerts=stream.alerts
+    )
+
+
 # ─── Symptom Entries ───────────────────────────────────────────────────────────
 
 @app.post("/entries", response_model=SymptomEntryResponse, tags=["Entries"])
 def add_symptom_entry(body: SymptomEntryCreate, db: Session = Depends(get_db)):
     patient = _get_patient_or_404(body.patient_id, db)
     config = DISEASE_CONFIGS[patient.disease]
+    required_global_symptoms = ["sleep_quality", "stress_symptom_severity"]
 
     # Validate symptom names
     valid_symptoms = config.get("symptoms", [])
     for sym in body.symptoms:
         if sym not in valid_symptoms:
             raise HTTPException(400, f"Unknown symptom '{sym}' for disease {patient.disease}")
+
+    missing_required = [sym for sym in required_global_symptoms if sym in valid_symptoms and sym not in body.symptoms]
+    if missing_required:
+        raise HTTPException(
+            400,
+            f"Missing required symptom values: {', '.join(missing_required)}"
+        )
 
     # Validate symptom range
     for sym, val in body.symptoms.items():
@@ -175,6 +582,7 @@ def add_symptom_entry(body: SymptomEntryCreate, db: Session = Depends(get_db)):
         timestamp=timestamp,
         symptoms_json=json.dumps(body.symptoms),
         triggers_json=json.dumps(body.triggers),
+        lifestyle_json=json.dumps(body.lifestyle_context or {}),
         notes=body.notes
     )
     db.add(entry)
@@ -191,6 +599,7 @@ def add_symptom_entry(body: SymptomEntryCreate, db: Session = Depends(get_db)):
         timestamp=entry.timestamp,
         symptoms=entry.symptoms,
         triggers=entry.triggers,
+        lifestyle_context=entry.lifestyle_context,
         notes=entry.notes
     )
 
@@ -204,7 +613,7 @@ def get_entries(patient_id: str, limit: int = 100, db: Session = Depends(get_db)
                .limit(limit).all())
     return [SymptomEntryResponse(
         id=e.id, patient_id=e.patient_id, timestamp=e.timestamp,
-        symptoms=e.symptoms, triggers=e.triggers, notes=e.notes
+        symptoms=e.symptoms, triggers=e.triggers, lifestyle_context=e.lifestyle_context, notes=e.notes
     ) for e in entries]
 
 
@@ -354,51 +763,37 @@ def predict_risk(body: RiskPredictionRequest, db: Session = Depends(get_db)):
                      .filter(ComputedSignal.patient_id == body.patient_id)
                      .order_by(ComputedSignal.computed_at.desc())
                      .first())
+    latest_fis = (db.query(FunctionalScore)
+                  .filter(FunctionalScore.patient_id == body.patient_id)
+                  .order_by(FunctionalScore.computed_at.desc())
+                  .first())
+    latest_entry = (db.query(SymptomEntry)
+                    .filter(SymptomEntry.patient_id == body.patient_id)
+                    .order_by(SymptomEntry.timestamp.desc())
+                    .first())
 
-    if not latest_signal:
+    if not latest_signal or not latest_entry:
         raise HTTPException(404, "No signals computed yet. Call /compute-signals first.")
 
-    risk_cat = latest_signal.risk_category
-    vi = latest_signal.volatility_index or 0.0
-    z_max = max(latest_signal.z_scores.values()) if latest_signal.z_scores else 0.0
-
-    # Signal-derived probability estimates (conservative heuristic)
-    def softmax_probs(scores):
-        import math
-        e = [math.exp(s) for s in scores]
-        total = sum(e)
-        return [round(x / total, 4) for x in e]
-
-    # Score each category based on signals
-    scores = {
-        "LOW": max(0.0, 2.0 - z_max - vi * 2),
-        "MODERATE": max(0.0, 1.0 + z_max * 0.3 - abs(z_max - 1.5) * 0.5),
-        "HIGH": max(0.0, z_max * 0.5 + vi),
-        "CRITICAL": max(0.0, (z_max - 2.0) + vi * 2)
-    }
-    probs_list = softmax_probs(list(scores.values()))
-    probs = dict(zip(scores.keys(), probs_list))
-
-    # Top contributing features
-    top_features = [
-        {"feature": "z_score_max", "importance": round(min(z_max / 4, 1.0), 3),
-         "direction": "+" if z_max > 0 else "-"},
-        {"feature": "volatility_index", "importance": round(vi, 3),
-         "direction": "+"},
-        {"feature": "data_completeness", "importance": round(latest_signal.data_completeness or 0, 3),
-         "direction": "-"}
-    ]
+    risk_payload = _compute_disease_aware_risk(patient, latest_entry, latest_signal, latest_fis)
+    risk_cat = risk_payload["risk_category"]
+    probs = risk_payload["risk_probabilities"]
+    top_features = risk_payload["top_contributing_features"]
 
     # Simple 3-day forecast: assume trend continuation with mean reversion
     entries = (db.query(SymptomEntry)
                .filter(SymptomEntry.patient_id == body.patient_id)
                .order_by(SymptomEntry.timestamp.desc())
                .limit(7).all())
+    relevant_symptoms = [
+        s for s in DISEASE_CONFIGS[patient.disease].get("symptoms", [])
+        if s not in {"sleep_quality", "stress_symptom_severity"}
+    ][:5] + ["sleep_quality", "stress_symptom_severity"]
 
     if entries:
         recent_means = []
         for e in entries:
-            vals = list(e.symptoms.values())
+            vals = [e.symptoms.get(sym) for sym in relevant_symptoms if sym in e.symptoms]
             if vals:
                 recent_means.append(sum(vals) / len(vals))
         recent_means.reverse()
@@ -443,6 +838,10 @@ def generate_summary(body: SummaryRequest, db: Session = Depends(get_db)):
                   .filter(FunctionalScore.patient_id == body.patient_id)
                   .order_by(FunctionalScore.computed_at.desc())
                   .first())
+    latest_entry = (db.query(SymptomEntry)
+                    .filter(SymptomEntry.patient_id == body.patient_id)
+                    .order_by(SymptomEntry.timestamp.desc())
+                    .first())
 
     if not latest_signal:
         raise HTTPException(404, "No signals computed yet. Call /compute-signals first.")
@@ -479,6 +878,11 @@ def generate_summary(body: SummaryRequest, db: Session = Depends(get_db)):
         "risk_category": latest_signal.risk_category,
         "red_flags": []
     }
+
+    if latest_entry:
+        risk_payload = _compute_disease_aware_risk(patient, latest_entry, latest_signal, latest_fis)
+        signals["risk_category"] = risk_payload["risk_category"]
+        signals["context_statement"] = risk_payload["context_statement"]
 
     summary = generate_structured_summary(
         patient_id=body.patient_id,

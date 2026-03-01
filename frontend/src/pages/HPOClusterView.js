@@ -7,6 +7,8 @@
 // - Animated floating/breathing effect on all nodes
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { matchHPO } from '../api';
+import { useLang } from '../i18n/LanguageContext';
+import theme from '../theme';
 
 // ── Color palette ─────────────────────────────────────────────────────────────
 const PALETTE = {
@@ -262,6 +264,7 @@ function project(x, y, z, camZ, cx, cy, scale) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function HPOClusterView() {
+    const { t } = useLang();
     const canvasRef = useRef(null);
     const stateRef = useRef({
         zoom: 1.0,
@@ -413,7 +416,7 @@ export default function HPOClusterView() {
                 ctx.globalAlpha = opacity * 0.5;
                 ctx.font = `${Math.max(7, 8.5 * n.scale * st.zoom)}px 'Inter', sans-serif`;
                 ctx.fillStyle = n.color;
-                ctx.fillText(`${(HPO_DATA[n.disease] || []).length} HPO`, n.sx, n.sy + r + 10 * n.scale);
+                ctx.fillText(`${(HPO_DATA[n.disease] || []).length} ${t.hpoTermCount}`, n.sx, n.sy + r + 10 * n.scale);
             } else {
                 // HPO satellite nodes — smaller spheres
                 const sphereGrd = ctx.createRadialGradient(
@@ -452,9 +455,9 @@ export default function HPOClusterView() {
         ctx.fillStyle = '#8b949e';
         ctx.font = '11px monospace';
         ctx.textAlign = 'right';
-        ctx.fillText(`zoom ${(st.zoom * 100).toFixed(0)}%`, W - 16, H - 16);
+        ctx.fillText(`${t.hpoZoom} ${(st.zoom * 100).toFixed(0)}%`, W - 16, H - 16);
         ctx.restore();
-    }, [selected]);
+    }, [selected, t]);
 
     // ── Render loop ─────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -573,16 +576,19 @@ export default function HPOClusterView() {
             {/* Header */}
             <div style={{ padding: '0 0 16px' }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: '#e6edf3', letterSpacing: '-0.5px' }}>
-                    3D HPO Cluster Universe
+                    {t.hpoTitle}
+                </div>
+                <div style={{ fontSize: 13, color: '#8b949e', marginTop: 6, lineHeight: 1.6 }}>
+                    {t.hpoSub}
                 </div>
                 <div style={{ fontSize: 13, color: '#484f58', marginTop: 3 }}>
-                    22 rare disease clusters · {GRAPH.nodes.length} nodes · Drag to rotate · Scroll to zoom · Click to inspect
+                    {t.hpoMeta(GRAPH.nodes.length)}
                 </div>
             </div>
 
             <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
                 {/* ── 3D Canvas ── */}
-                <div style={{ flex: 1, borderRadius: 16, overflow: 'hidden', border: '1px solid #21262d', position: 'relative', background: '#0d1117', minHeight: 0 }}>
+                <div style={{ flex: 1, borderRadius: 16, overflow: 'hidden', border: `1px solid ${theme.border}`, position: 'relative', background: theme.panelGradient, minHeight: 0, boxShadow: theme.shadowGlow }}>
                     <canvas
                         ref={canvasRef}
                         style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab', userSelect: 'none' }}
@@ -627,13 +633,13 @@ export default function HPOClusterView() {
                 </div>
 
                 {/* ── Inspector Panel ── */}
-                <div style={{ width: 300, background: '#161b22', border: '1px solid #21262d', borderRadius: 16, overflow: 'auto', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ width: 300, background: theme.panelGradient, border: `1px solid ${theme.border}`, borderRadius: 16, overflow: 'auto', flexShrink: 0, display: 'flex', flexDirection: 'column', boxShadow: theme.shadowGlow }}>
                     {!selected ? (
                         <div style={{ padding: 32, color: '#484f58', textAlign: 'center', fontSize: 13, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                             <div style={{ fontSize: 40, opacity: 0.3 }}>🔬</div>
-                            <div>Click any node on the 3D cluster to inspect it</div>
+                            <div>{t.hpoEmptyTitle}</div>
                             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#30363d' }}>
-                                Large spheres = diseases<br />Small spheres = HPO terms
+                                {t.hpoEmptyLegendDiseases}<br />{t.hpoEmptyLegendTerms}
                             </div>
                         </div>
                     ) : (
@@ -646,14 +652,14 @@ export default function HPOClusterView() {
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontSize: 14, fontWeight: 800, color: '#e6edf3' }}>{selected.label}</div>
                                     <div style={{ fontSize: 11, color: PALETTE[selected.disease] }}>
-                                        {selected.kind === 'disease' ? 'Disease Cluster' : selected.hpo_id}
+                                        {selected.kind === 'disease' ? t.hpoDiseaseCluster : selected.hpo_id}
                                     </div>
                                 </div>
                             </div>
 
                             {selected.kind === 'disease' && (
                                 <>
-                                    <div style={{ fontSize: 11, color: '#484f58', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10 }}>HPO Terms in this cluster</div>
+                                    <div style={{ fontSize: 11, color: '#484f58', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10 }}>{t.hpoTermsInCluster}</div>
                                     {(HPO_DATA[selected.disease] || []).map((h, i) => (
                                         <div key={i} style={{ display: 'flex', gap: 8, padding: '7px 10px', background: '#0d1117', borderRadius: 8, marginBottom: 5, alignItems: 'center' }}>
                                             <div style={{ width: 6, height: 6, borderRadius: '50%', background: PALETTE[selected.disease], flexShrink: 0 }} />
@@ -669,11 +675,11 @@ export default function HPOClusterView() {
                             {selected.kind === 'hpo' && (
                                 <>
                                     <div style={{ marginBottom: 16 }}>
-                                        <div style={{ fontSize: 11, color: '#484f58', marginBottom: 4 }}>Symptom Key</div>
+                                        <div style={{ fontSize: 11, color: '#484f58', marginBottom: 4 }}>{t.hpoSymptomKey}</div>
                                         <code style={{ fontSize: 11, color: '#c9d1d9', background: '#21262d', padding: '3px 8px', borderRadius: 6 }}>{selected.key}</code>
                                     </div>
-                                    <div style={{ fontSize: 11, color: '#484f58', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10 }}>Semantic Neighbors</div>
-                                    {loadingMatch && <div style={{ color: '#484f58', fontSize: 12 }}>⏳ Matching HPO terms...</div>}
+                                    <div style={{ fontSize: 11, color: '#484f58', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 10 }}>{t.hpoSemanticNeighbors}</div>
+                                    {loadingMatch && <div style={{ color: '#484f58', fontSize: 12 }}>{t.hpoMatching}</div>}
                                     {matches && matches.map((m, i) => (
                                         <div key={i} style={{ background: '#0d1117', borderRadius: 8, padding: '8px 10px', marginBottom: 6 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

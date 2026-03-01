@@ -5,8 +5,20 @@ const BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 const api = axios.create({ baseURL: BASE, timeout: 15000 });
 
-export const createPatient = (id, disease) =>
-  api.post('/patients', { id, disease });
+export const createPatient = (
+  id,
+  disease,
+  usesWearable = null,
+  wearableDeviceType = null,
+  wantsWearableLink = null
+) =>
+  api.post('/patients', {
+    id,
+    disease,
+    uses_wearable: usesWearable,
+    wearable_device_type: wearableDeviceType,
+    wants_wearable_link: wantsWearableLink
+  });
 
 export const getPatient = (id) => api.get(`/patients/${id}`);
 
@@ -35,6 +47,9 @@ export const getHistory = (patientId) =>
 export const getBaseline = (patientId) =>
   api.get(`/patients/${patientId}/baseline`);
 
+export const getSensorSummary = (patientId) =>
+  api.get(`/patients/${patientId}/sensor-summary`);
+
 export const listDiseases = () => api.get('/diseases');
 
 export const getDiseaseConfig = (diseaseId) =>
@@ -52,4 +67,3 @@ export const getFlareAlert = (patientId) =>
   api.get(`/flare-alert/${patientId}`);
 
 export default api;
-

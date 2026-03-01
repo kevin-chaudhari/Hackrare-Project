@@ -2,59 +2,87 @@
 import React, { useState, useEffect } from 'react';
 import { addEntry, getDiseaseConfig, computeSignals } from '../api';
 import { useLang } from '../i18n/LanguageContext';
+import theme from '../theme';
 
-const TRIGGERS_DISPLAY = {
-  dehydration: 'Dehydration', heat_exposure: 'Heat Exposure', prolonged_standing: 'Prolonged Standing',
-  stress: 'Stress', sleep_deprivation: 'Sleep Deprivation', alcohol: 'Alcohol',
-  large_meals: 'Large Meals', exercise: 'Exercise', overexertion: 'Overexertion',
-  weather_change: 'Weather Change', hormonal_changes: 'Hormonal Changes',
-  infection: 'Infection', cold_weather: 'Cold Weather', allergens: 'Allergens',
-  smoke_exposure: 'Smoke Exposure', dry_environment: 'Dry Environment',
-  nasal_spray_use: 'Nasal Spray Use', exertion: 'Exertion', altitude: 'Altitude',
-  illness: 'Illness', menstruation: 'Menstruation', cold_exposure: 'Cold Exposure',
-  fatigue: 'Fatigue', medications: 'Medications'
-};
-
-const severityColor = (v) => v >= 7 ? '#f85149' : v >= 4 ? '#d29922' : '#3fb950';
+const severityColor = (v) => v >= 7 ? theme.coral : v >= 4 ? theme.amber : theme.primary;
+const defaultLifestyleContext = () => ({
+  sleep_duration_hours: 8,
+  sleep_disruption: 'no',
+  activity_level: 'moderate',
+  overexertion: 'no',
+  activity_worsened_symptoms: 'unsure',
+  mentally_demanding_day: 'no',
+  emotional_strain_note: '',
+  hydration_level: 'adequate',
+  large_or_unusual_meals: 'no',
+  missed_meals: 'no',
+  heat_exposure: 'no',
+  cold_exposure: 'no',
+  illness_symptoms: 'no',
+  travel_or_routine_change: 'no',
+});
 
 const s = {
-  pageTitle: { fontSize: 24, fontWeight: 800, color: '#e6edf3', letterSpacing: '-0.5px', marginBottom: 4 },
-  pageSub: { fontSize: 14, color: '#484f58', marginBottom: 28 },
+  pageTitle: { fontSize: 24, fontWeight: 800, color: theme.text, letterSpacing: '-0.5px', marginBottom: 4 },
+  pageSub: { fontSize: 14, color: theme.textMuted, marginBottom: 28 },
   grid: { display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 20 },
   card: {
-    background: '#161b22', borderRadius: 14, padding: 24,
-    border: '1px solid #21262d', boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
+    background: theme.panelGradient, borderRadius: 14, padding: 24,
+    border: `1px solid ${theme.border}`, boxShadow: theme.shadowGlow
   },
-  cardTitle: { fontSize: 11, fontWeight: 700, color: '#484f58', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 18 },
+  cardTitle: { fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 18 },
   sliderRow: { marginBottom: 20 },
   sliderTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  sliderName: { fontSize: 13, fontWeight: 600, color: '#c9d1d9' },
+  sliderName: { fontSize: 13, fontWeight: 600, color: theme.textSoft },
   sliderVal: (v) => ({
     fontSize: 13, fontWeight: 800, color: severityColor(v),
     background: `${severityColor(v)}1a`, padding: '2px 10px', borderRadius: 20
   }),
-  sliderTrack: { width: '100%', accentColor: '#3fb950', height: 4, cursor: 'pointer' },
+  contextValue: {
+    fontSize: 12, fontWeight: 700, color: theme.tealSoft,
+    background: theme.tealBg, padding: '3px 10px', borderRadius: 20
+  },
+  sliderTrack: { width: '100%', accentColor: theme.primary, height: 4, cursor: 'pointer' },
+  helperText: { fontSize: 12, color: theme.textMuted, lineHeight: 1.5, marginBottom: 14 },
+  sectionBlock: { marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${theme.border}` },
+  sectionHeading: { fontSize: 11, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700, marginBottom: 10 },
+  microLabel: { display: 'block', fontSize: 12, color: theme.textSoft, fontWeight: 600, marginBottom: 8 },
+  choiceRow: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 },
+  choiceBtn: (active) => ({
+    padding: '8px 11px',
+    borderRadius: 999,
+    border: `1px solid ${active ? theme.teal : theme.borderSoft}`,
+    background: active ? `linear-gradient(180deg, ${theme.tealBg}, rgba(17, 24, 39, 0.92))` : theme.surfaceGradient,
+    color: active ? theme.tealSoft : theme.textMuted,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer'
+  }),
+  contextToggle: {
+    width: '100%', marginTop: 4, background: 'transparent', border: `1px dashed ${theme.borderSoft}`, borderRadius: 10,
+    padding: '10px 12px', color: theme.textMuted, fontSize: 12, fontWeight: 700, cursor: 'pointer'
+  },
   triggerGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 },
   triggerBtn: (active) => ({
-    padding: '8px 10px', border: `1px solid ${active ? '#3fb950' : '#21262d'}`,
-    borderRadius: 8, background: active ? 'rgba(63,185,80,0.1)' : '#0d1117',
+    padding: '8px 10px', border: `1px solid ${active ? theme.teal : theme.border}`,
+    borderRadius: 8, background: active ? `linear-gradient(180deg, ${theme.tealBg}, rgba(17, 24, 39, 0.92))` : theme.surfaceGradient,
     fontSize: 12, fontWeight: active ? 700 : 400, cursor: 'pointer',
-    color: active ? '#3fb950' : '#8b949e', textAlign: 'left', transition: 'all 0.12s'
+    color: active ? theme.tealSoft : theme.textMuted, textAlign: 'left', transition: 'all 0.12s'
   }),
   textarea: {
-    width: '100%', border: '1px solid #30363d', borderRadius: 10, padding: '10px 14px',
+    width: '100%', border: `1px solid ${theme.borderSoft}`, borderRadius: 10, padding: '10px 14px',
     fontSize: 13, resize: 'vertical', minHeight: 80, boxSizing: 'border-box',
-    background: '#0d1117', color: '#e6edf3', outline: 'none'
+    background: theme.surfaceGradient, color: theme.text, outline: 'none'
   },
   submitBtn: {
-    marginTop: 16, width: '100%', background: 'linear-gradient(135deg, #3fb950, #1a7f37)',
+    marginTop: 16, width: '100%', background: `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDeep})`,
     color: '#fff', border: 'none', borderRadius: 10, padding: '13px 0',
     fontSize: 15, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
   },
-  success: { background: 'rgba(63,185,80,0.1)', color: '#3fb950', border: '1px solid rgba(63,185,80,0.3)', borderRadius: 8, padding: '10px 14px', marginTop: 12, fontSize: 13 },
-  error: { background: 'rgba(248,81,73,0.1)', color: '#f85149', border: '1px solid rgba(248,81,73,0.3)', borderRadius: 8, padding: '10px 14px', marginTop: 12, fontSize: 13 },
-  disclaimer: { fontSize: 11, color: '#30363d', marginTop: 16, fontStyle: 'italic', lineHeight: 1.5, textAlign: 'center' },
-  loading: { padding: 40, color: '#484f58', textAlign: 'center' }
+  success: { background: theme.primaryBg, color: theme.primary, border: `1px solid ${theme.primary}`, borderRadius: 8, padding: '10px 14px', marginTop: 12, fontSize: 13 },
+  error: { background: theme.coralBg, color: theme.coral, border: `1px solid ${theme.coralDeep}`, borderRadius: 8, padding: '10px 14px', marginTop: 12, fontSize: 13 },
+  disclaimer: { fontSize: 11, color: theme.textMeta, marginTop: 16, fontStyle: 'italic', lineHeight: 1.5, textAlign: 'center' },
+  loading: { padding: 40, color: theme.textMuted, textAlign: 'center' }
 };
 
 export default function PatientDashboard({ patient }) {
@@ -63,6 +91,8 @@ export default function PatientDashboard({ patient }) {
   const [symptoms, setSymptoms] = useState({});
   const [triggers, setTriggers] = useState([]);
   const [notes, setNotes] = useState('');
+  const [lifestyleContext, setLifestyleContext] = useState(defaultLifestyleContext);
+  const [showMoreContext, setShowMoreContext] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState(null);
 
@@ -72,6 +102,7 @@ export default function PatientDashboard({ patient }) {
       const initial = {};
       res.data.symptoms.forEach(s => { initial[s] = 5.0; });
       setSymptoms(initial);
+      setLifestyleContext(defaultLifestyleContext());
     }).catch(() => { });
   }, [patient.disease]);
 
@@ -79,21 +110,66 @@ export default function PatientDashboard({ patient }) {
     setTriggers(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
   };
 
+  const updateLifestyle = (key, value) => {
+    setLifestyleContext(prev => ({ ...prev, [key]: value }));
+  };
+
+  const renderChoiceGroup = (value, onChange, options) => (
+    <div style={s.choiceRow}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          style={s.choiceBtn(value === option.value)}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+
   const handleSubmit = async () => {
     setLoading(true); setMsg(null);
     try {
-      await addEntry({ patient_id: patient.id, symptoms, triggers, notes: notes || null });
+      await addEntry({
+        patient_id: patient.id,
+        symptoms,
+        triggers,
+        lifestyle_context: lifestyleContext,
+        notes: notes || null
+      });
       await computeSignals(patient.id, 7);
-      setMsg({ type: 'success', text: '✓ Entry saved & signals updated.' });
+      setMsg({ type: 'success', text: t.saveDone });
       setNotes('');
     } catch (e) {
-      setMsg({ type: 'error', text: e.response?.data?.detail || 'Failed to save entry.' });
+      setMsg({ type: 'error', text: e.response?.data?.detail || t.saveError });
     } finally {
       setLoading(false);
     }
   };
 
   if (!config) return <div style={s.loading}>{t.loadingConfig}</div>;
+
+  const yesNoOptions = [
+    { value: 'yes', label: t.choiceYes },
+    { value: 'no', label: t.choiceNo },
+  ];
+  const yesNoUnsureOptions = [
+    { value: 'yes', label: t.choiceYes },
+    { value: 'no', label: t.choiceNo },
+    { value: 'unsure', label: t.choiceUnsure },
+  ];
+  const activityOptions = [
+    { value: 'low', label: t.choiceLow },
+    { value: 'moderate', label: t.choiceModerate },
+    { value: 'high', label: t.choiceHigh },
+  ];
+  const hydrationOptions = [
+    { value: 'low', label: t.choiceLow },
+    { value: 'adequate', label: t.choiceAdequate },
+    { value: 'high', label: t.choiceHigh },
+  ];
 
   return (
     <div>
@@ -124,6 +200,98 @@ export default function PatientDashboard({ patient }) {
 
         {/* Right column */}
         <div>
+          <div style={{ ...s.card, marginBottom: 16 }}>
+            <div style={s.cardTitle}>{t.contextTitle}</div>
+            <div style={s.helperText}>{t.contextSub}</div>
+
+            <div style={s.sectionBlock}>
+              <div style={s.sectionHeading}>{t.sleepDomain}</div>
+              <label style={s.microLabel}>{t.sleepDurationLabel}</label>
+              <div style={{ ...s.sliderTop, marginBottom: 10 }}>
+                <span style={s.sliderName}>{t.sleepDurationLabel}</span>
+                <span style={s.contextValue}>
+                  {t.sleepDurationHours(lifestyleContext.sleep_duration_hours)}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={12}
+                step={0.5}
+                style={s.sliderTrack}
+                value={lifestyleContext.sleep_duration_hours}
+                onChange={(e) => updateLifestyle('sleep_duration_hours', parseFloat(e.target.value))}
+              />
+              <label style={{ ...s.microLabel, marginTop: 12 }}>{t.sleepDisruptionLabel}</label>
+              {renderChoiceGroup(lifestyleContext.sleep_disruption, (value) => updateLifestyle('sleep_disruption', value), yesNoOptions)}
+            </div>
+
+            <div style={s.sectionBlock}>
+              <div style={s.sectionHeading}>{t.activityDomain}</div>
+              <label style={s.microLabel}>{t.activityLevelLabel}</label>
+              {renderChoiceGroup(lifestyleContext.activity_level, (value) => updateLifestyle('activity_level', value), activityOptions)}
+            </div>
+
+            <div style={s.sectionBlock}>
+              <div style={s.sectionHeading}>{t.stressDomain}</div>
+              <label style={s.microLabel}>{t.mentallyDemandingLabel}</label>
+              {renderChoiceGroup(lifestyleContext.mentally_demanding_day, (value) => updateLifestyle('mentally_demanding_day', value), yesNoOptions)}
+            </div>
+
+            <div style={{ ...s.sectionBlock, borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
+              <div style={s.sectionHeading}>{t.hydrationDomain}</div>
+              <label style={s.microLabel}>{t.hydrationLabel}</label>
+              {renderChoiceGroup(lifestyleContext.hydration_level, (value) => updateLifestyle('hydration_level', value), hydrationOptions)}
+            </div>
+
+            <button type="button" style={s.contextToggle} onClick={() => setShowMoreContext(prev => !prev)}>
+              {showMoreContext ? t.contextLess : t.contextMore}
+            </button>
+
+            {showMoreContext && (
+              <div style={{ marginTop: 16 }}>
+                <div style={s.sectionBlock}>
+                  <div style={s.sectionHeading}>{t.activityDomain}</div>
+                  <label style={s.microLabel}>{t.overexertionLabel}</label>
+                  {renderChoiceGroup(lifestyleContext.overexertion, (value) => updateLifestyle('overexertion', value), yesNoOptions)}
+                  <label style={s.microLabel}>{t.activityWorsenedLabel}</label>
+                  {renderChoiceGroup(lifestyleContext.activity_worsened_symptoms, (value) => updateLifestyle('activity_worsened_symptoms', value), yesNoUnsureOptions)}
+                </div>
+
+                <div style={s.sectionBlock}>
+                  <div style={s.sectionHeading}>{t.stressDomain}</div>
+                  <label style={s.microLabel}>{t.emotionalStrainLabel}</label>
+                  <textarea
+                    style={{ ...s.textarea, minHeight: 70 }}
+                    placeholder={t.emotionalStrainPlaceholder}
+                    value={lifestyleContext.emotional_strain_note}
+                    onChange={(e) => updateLifestyle('emotional_strain_note', e.target.value)}
+                  />
+                </div>
+
+                <div style={s.sectionBlock}>
+                  <div style={s.sectionHeading}>{t.hydrationDomain}</div>
+                  <label style={s.microLabel}>{t.unusualMealsLabel}</label>
+                  {renderChoiceGroup(lifestyleContext.large_or_unusual_meals, (value) => updateLifestyle('large_or_unusual_meals', value), yesNoOptions)}
+                  <label style={s.microLabel}>{t.missedMealsLabel}</label>
+                  {renderChoiceGroup(lifestyleContext.missed_meals, (value) => updateLifestyle('missed_meals', value), yesNoOptions)}
+                </div>
+
+                <div style={{ ...s.sectionBlock, borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
+                  <div style={s.sectionHeading}>{t.environmentDomain}</div>
+                  <label style={s.microLabel}>{t.heatExposureLabel}</label>
+                  {renderChoiceGroup(lifestyleContext.heat_exposure, (value) => updateLifestyle('heat_exposure', value), yesNoOptions)}
+                  <label style={s.microLabel}>{t.coldExposureLabel}</label>
+                  {renderChoiceGroup(lifestyleContext.cold_exposure, (value) => updateLifestyle('cold_exposure', value), yesNoOptions)}
+                  <label style={s.microLabel}>{t.illnessSymptomsLabel}</label>
+                  {renderChoiceGroup(lifestyleContext.illness_symptoms, (value) => updateLifestyle('illness_symptoms', value), yesNoOptions)}
+                  <label style={s.microLabel}>{t.travelChangeLabel}</label>
+                  {renderChoiceGroup(lifestyleContext.travel_or_routine_change, (value) => updateLifestyle('travel_or_routine_change', value), yesNoOptions)}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div style={{ ...s.card, marginBottom: 16 }}>
             <div style={s.cardTitle}>{t.triggersTitle}</div>
             <div style={s.triggerGrid}>

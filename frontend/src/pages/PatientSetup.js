@@ -1,38 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import { createPatient, listDiseases } from '../api';
 import { useLang } from '../i18n/LanguageContext';
+import theme from '../theme';
 
 const s = {
   wrap: { display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '20px 0' },
   card: {
-    background: '#161b22', borderRadius: 16, padding: 36, border: '1px solid #21262d',
-    width: '100%', maxWidth: 560, boxShadow: '0 8px 32px rgba(0,0,0,0.4)', color: '#e6edf3'
+    background: theme.panelGradient, borderRadius: 16, padding: 36, border: `1px solid ${theme.border}`,
+    width: '100%', maxWidth: 560, boxShadow: theme.shadowGlow, color: theme.text
   },
-  heading: { fontSize: 24, fontWeight: 800, color: '#e6edf3', marginBottom: 4, letterSpacing: '-0.5px' },
-  sub: { fontSize: 14, color: '#484f58', marginBottom: 32, lineHeight: 1.6 },
+  heading: { fontSize: 24, fontWeight: 800, color: theme.text, marginBottom: 4, letterSpacing: '-0.5px' },
+  sub: { fontSize: 14, color: theme.textMuted, marginBottom: 32, lineHeight: 1.6 },
   fieldGroup: { marginBottom: 20 },
-  label: { display: 'block', fontSize: 12, fontWeight: 700, color: '#8b949e', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  label: { display: 'block', fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
   input: {
-    width: '100%', padding: '11px 14px', border: '1px solid #30363d', borderRadius: 10,
-    fontSize: 14, boxSizing: 'border-box', background: '#0d1117', color: '#e6edf3',
+    width: '100%', padding: '11px 14px', border: `1px solid ${theme.borderSoft}`, borderRadius: 10,
+    fontSize: 14, boxSizing: 'border-box', background: theme.bg, color: theme.text,
     outline: 'none', transition: 'border 0.15s'
   },
   diseaseGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxHeight: 320, overflowY: 'auto', paddingRight: 4 },
   diseaseCard: (active) => ({
-    border: `1.5px solid ${active ? '#3fb950' : '#21262d'}`,
+    border: `1.5px solid ${active ? theme.teal : theme.border}`,
     borderRadius: 10, padding: '10px 14px', cursor: 'pointer',
-    background: active ? 'rgba(63, 185, 80, 0.08)' : '#0d1117',
-    transition: 'all 0.15s'
+    background: active ? `linear-gradient(180deg, ${theme.tealBg}, rgba(17, 24, 39, 0.92))` : theme.bg,
+    transition: 'all 0.15s',
+    boxShadow: active ? '0 8px 20px rgba(0, 0, 0, 0.18)' : 'none'
   }),
-  diseaseId: { fontWeight: 700, fontSize: 14, color: '#e6edf3' },
-  diseaseName: { fontSize: 11, color: '#8b949e', marginTop: 2 },
+  diseaseId: { fontWeight: 700, fontSize: 14, color: theme.text },
+  diseaseName: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  promptCard: {
+    marginTop: 8,
+    padding: '14px 16px',
+    border: `1px solid ${theme.border}`,
+    borderRadius: 12,
+    background: theme.surfaceGradient,
+    boxShadow: theme.shadowSoft
+  },
+  promptTitle: { fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  promptText: { fontSize: 13, color: theme.text, lineHeight: 1.5, marginBottom: 10 },
+  promptHelp: { fontSize: 12, color: theme.textMuted, lineHeight: 1.5, marginBottom: 12 },
+  choiceRow: { display: 'flex', gap: 8, flexWrap: 'wrap' },
+  choiceBtn: (active) => ({
+    padding: '9px 12px',
+    borderRadius: 999,
+    border: `1px solid ${active ? theme.teal : theme.borderSoft}`,
+    background: active ? `linear-gradient(180deg, ${theme.tealBg}, rgba(31, 41, 55, 0.96))` : theme.surfaceGradient,
+    color: active ? theme.tealSoft : theme.textSoft,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: 'pointer'
+  }),
+  inlineField: { marginTop: 14 },
   btn: {
-    width: '100%', background: 'linear-gradient(135deg, #3fb950, #1a7f37)', color: '#fff',
+    width: '100%', background: `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDeep})`, color: '#fff',
     border: 'none', borderRadius: 10, padding: '13px 0', fontSize: 15, fontWeight: 700,
     cursor: 'pointer', marginTop: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
   },
-  error: { color: '#f85149', fontSize: 13, padding: '10px 14px', background: 'rgba(248,81,73,0.1)', border: '1px solid rgba(248,81,73,0.3)', borderRadius: 8, marginBottom: 16 },
-  success: { color: '#3fb950', fontSize: 13, padding: '10px 14px', background: 'rgba(63,185,80,0.1)', border: '1px solid rgba(63,185,80,0.3)', borderRadius: 8, marginBottom: 16 },
+  error: { color: theme.coral, fontSize: 13, padding: '10px 14px', background: theme.coralBg, border: `1px solid ${theme.coralDeep}`, borderRadius: 8, marginBottom: 16 },
+  success: { color: theme.primary, fontSize: 13, padding: '10px 14px', background: theme.primaryBg, border: `1px solid ${theme.primary}`, borderRadius: 8, marginBottom: 16 },
 };
 
 export default function PatientSetup({ onPatientCreated }) {
@@ -43,6 +68,9 @@ export default function PatientSetup({ onPatientCreated }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [diseases, setDiseases] = useState([]);
+  const [wearableUsage, setWearableUsage] = useState('');
+  const [deviceType, setDeviceType] = useState('');
+  const [wantsLink, setWantsLink] = useState('');
 
   useEffect(() => {
     listDiseases().then(res => setDiseases(res.data)).catch(console.error);
@@ -53,7 +81,15 @@ export default function PatientSetup({ onPatientCreated }) {
     if (!selectedDisease) { setError(t.errorNoDisease); return; }
     setError(''); setLoading(true);
     try {
-      const res = await createPatient(patientId.trim(), selectedDisease);
+      const usesWearable =
+        wearableUsage === 'yes' ? true : wearableUsage === 'no' ? false : null;
+      const res = await createPatient(
+        patientId.trim(),
+        selectedDisease,
+        usesWearable,
+        usesWearable ? (deviceType.trim() || null) : null,
+        usesWearable ? (wantsLink === 'yes' ? true : wantsLink === 'no' ? false : null) : null
+      );
       setSuccess(t.successPatient(patientId));
       onPatientCreated(res.data);
     } catch (e) {
@@ -86,13 +122,87 @@ export default function PatientSetup({ onPatientCreated }) {
           <label style={s.label}>{t.diseaseLabel} ({diseases.length} {t.diseaseAvailable})</label>
           <div style={s.diseaseGrid}>
             {diseases.map(d => (
-              <div key={d.id} style={s.diseaseCard(selectedDisease === d.id)} onClick={() => setSelectedDisease(d.id)}>
+              <div
+                key={d.id}
+                style={s.diseaseCard(selectedDisease === d.id)}
+                onClick={() => {
+                  setSelectedDisease(d.id);
+                  setWearableUsage('');
+                  setDeviceType('');
+                  setWantsLink('');
+                }}
+              >
                 <div style={s.diseaseId}>{selectedDisease === d.id ? '✓ ' : ''}{d.id}</div>
                 <div style={s.diseaseName}>{d.name}</div>
               </div>
             ))}
           </div>
         </div>
+
+        {selectedDisease && (
+          <div style={s.fieldGroup}>
+            <div style={s.promptCard}>
+              <div style={s.promptTitle}>{t.wearablePromptLabel}</div>
+              <div style={s.promptText}>{t.wearablePromptQuestion}</div>
+              <div style={s.promptHelp}>{t.wearablePromptHelp}</div>
+              <div style={s.choiceRow}>
+                <button
+                  type="button"
+                  style={s.choiceBtn(wearableUsage === 'yes')}
+                  onClick={() => setWearableUsage('yes')}
+                >
+                  {wearableUsage === 'yes' ? '✓ ' : ''}{t.wearableYes}
+                </button>
+                <button
+                  type="button"
+                  style={s.choiceBtn(wearableUsage === 'no')}
+                  onClick={() => {
+                    setWearableUsage('no');
+                    setDeviceType('');
+                    setWantsLink('');
+                  }}
+                >
+                  {wearableUsage === 'no' ? '✓ ' : ''}{t.wearableNo}
+                </button>
+              </div>
+
+              {wearableUsage === 'yes' && (
+                <>
+                  <div style={s.inlineField}>
+                    <label style={s.label}>{t.deviceTypeLabel}</label>
+                    <input
+                      style={s.input}
+                      placeholder={t.deviceTypePlaceholder}
+                      value={deviceType}
+                      onChange={e => setDeviceType(e.target.value)}
+                    />
+                  </div>
+
+                  <div style={s.inlineField}>
+                    <div style={s.promptTitle}>{t.linkPromptLabel}</div>
+                    <div style={s.promptText}>{t.linkPromptQuestion}</div>
+                    <div style={s.choiceRow}>
+                      <button
+                        type="button"
+                        style={s.choiceBtn(wantsLink === 'yes')}
+                        onClick={() => setWantsLink('yes')}
+                      >
+                        {wantsLink === 'yes' ? '✓ ' : ''}{t.linkYes}
+                      </button>
+                      <button
+                        type="button"
+                        style={s.choiceBtn(wantsLink === 'no')}
+                        onClick={() => setWantsLink('no')}
+                      >
+                        {wantsLink === 'no' ? '✓ ' : ''}{t.linkNo}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <button style={s.btn} onClick={handleCreate} disabled={loading}>
           {loading ? t.creating : t.createBtn}

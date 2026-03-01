@@ -1291,6 +1291,43 @@ NEW_DISEASES = {
 }
 DISEASE_CONFIGS.update(NEW_DISEASES)
 
+REQUIRED_GLOBAL_SYMPTOMS = {
+    "sleep_quality": {
+        "label": "Sleep Quality (inverse)",
+        "hpo": "HP:0002360",
+    },
+    "stress_symptom_severity": {
+        "label": "Stress",
+        "hpo": "HP:0000739",
+    },
+}
+
+
+def _ensure_required_global_symptoms():
+    for config in DISEASE_CONFIGS.values():
+        symptoms = config.setdefault("symptoms", [])
+        symptom_labels = config.setdefault("symptom_labels", {})
+        fis_domain_weights = config.setdefault("fis_domain_weights", {})
+        hpo_terms = config.setdefault("hpo_terms", {})
+
+        for symptom_key, meta in REQUIRED_GLOBAL_SYMPTOMS.items():
+            if symptom_key not in symptoms:
+                symptoms.append(symptom_key)
+            symptom_labels.setdefault(symptom_key, meta["label"])
+            hpo_terms.setdefault(symptom_key, meta["hpo"])
+
+        fis_domain_weights.setdefault("sleep", {})
+        fis_domain_weights["sleep"].setdefault("sleep_quality", 0.35)
+
+        fis_domain_weights.setdefault("cognitive", {})
+        fis_domain_weights["cognitive"].setdefault("stress_symptom_severity", 0.2)
+
+        fis_domain_weights.setdefault("work", {})
+        fis_domain_weights["work"].setdefault("stress_symptom_severity", 0.2)
+
+        fis_domain_weights.setdefault("social", {})
+        fis_domain_weights["social"].setdefault("stress_symptom_severity", 0.25)
+
 
 # --- AUTOMATICALLY INJECTED HPO MAPPINGS ---
 HPO_MAPPINGS = {
@@ -1499,6 +1536,9 @@ HPO_MAPPINGS = {
         "sleep_disturbances": "HP:0002360"
     }
 }
+_ensure_required_global_symptoms()
 for d in DISEASE_CONFIGS:
     if d in HPO_MAPPINGS:
         DISEASE_CONFIGS[d]['hpo_terms'] = HPO_MAPPINGS[d]
+        for symptom_key, meta in REQUIRED_GLOBAL_SYMPTOMS.items():
+            DISEASE_CONFIGS[d]['hpo_terms'].setdefault(symptom_key, meta["hpo"])

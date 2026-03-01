@@ -17,6 +17,9 @@ class Patient(Base):
     __tablename__ = "patients"
     id = Column(String, primary_key=True, index=True)
     disease = Column(String, nullable=False, index=True)
+    uses_wearable = Column(Boolean, nullable=True)
+    wearable_device_type = Column(String, nullable=True)
+    wants_wearable_link = Column(Boolean, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     disease_config_json = Column(Text, nullable=True)  # optional overrides
 
@@ -25,6 +28,7 @@ class Patient(Base):
     signals = relationship("ComputedSignal", back_populates="patient", cascade="all, delete-orphan")
     fis_scores = relationship("FunctionalScore", back_populates="patient", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="patient", cascade="all, delete-orphan")
+    sensor_streams = relationship("SensorStream", back_populates="patient", cascade="all, delete-orphan")
 
 
 class SymptomEntry(Base):
@@ -34,6 +38,7 @@ class SymptomEntry(Base):
     timestamp = Column(DateTime, nullable=False, index=True)
     symptoms_json = Column(Text, nullable=False)   # JSON: {symptom: 0-10}
     triggers_json = Column(Text, nullable=False, default="[]")  # JSON: [trigger_name]
+    lifestyle_json = Column(Text, nullable=False, default="{}")  # JSON: structured lifestyle context
     notes = Column(Text, nullable=True)
 
     patient = relationship("Patient", back_populates="entries")
@@ -49,6 +54,10 @@ class SymptomEntry(Base):
     @property
     def triggers(self):
         return json.loads(self.triggers_json)
+
+    @property
+    def lifestyle_context(self):
+        return json.loads(self.lifestyle_json)
 
 
 class BaselineProfile(Base):
@@ -118,6 +127,42 @@ class FunctionalScore(Base):
         return json.loads(self.domain_scores_json)
 
 
+class SensorStream(Base):
+    __tablename__ = "sensor_streams"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    patient_id = Column(String, ForeignKey("patients.id"), nullable=False, index=True)
+    recorded_at = Column(DateTime, default=datetime.utcnow, index=True)
+    source = Column(String, nullable=False, default="simulated_replay")
+    sample_count = Column(Integer, default=0)
+    duration_minutes = Column(Integer, default=0)
+    heart_rate_avg = Column(Float, nullable=True)
+    heart_rate_resting = Column(Float, nullable=True)
+    heart_rate_max = Column(Float, nullable=True)
+    hrv_rmssd = Column(Float, nullable=True)
+    spo2_avg = Column(Float, nullable=True)
+    skin_temp_avg = Column(Float, nullable=True)
+    activity_load = Column(Float, nullable=True)
+    recovery_score = Column(Float, nullable=True)
+    stress_load = Column(Float, nullable=True)
+    signal_quality = Column(String, default="GOOD")
+    insights_json = Column(Text, default="[]")
+    alerts_json = Column(Text, default="[]")
+
+    patient = relationship("Patient", back_populates="sensor_streams")
+
+    __table_args__ = (
+        Index("idx_sensor_stream_patient_time", "patient_id", "recorded_at"),
+    )
+
+    @property
+    def insights(self):
+        return json.loads(self.insights_json)
+
+    @property
+    def alerts(self):
+        return json.loads(self.alerts_json)
+
+
 class Alert(Base):
     __tablename__ = "alerts"
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -133,6 +178,23 @@ class Alert(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        columns = {
+            row[1]
+            for row in conn.exec_driver_sql("PRAGMA table_info(patients)").fetchall()
+        }
+        if "uses_wearable" not in columns:
+            conn.exec_driver_sql("ALTER TABLE patients ADD COLUMN uses_wearable BOOLEAN")
+        if "wearable_device_type" not in columns:
+            conn.exec_driver_sql("ALTER TABLE patients ADD COLUMN wearable_device_type VARCHAR")
+        if "wants_wearable_link" not in columns:
+            conn.exec_driver_sql("ALTER TABLE patients ADD COLUMN wants_wearable_link BOOLEAN")
+        entry_columns = {
+            row[1]
+            for row in conn.exec_driver_sql("PRAGMA table_info(symptom_entries)").fetchall()
+        }
+        if "lifestyle_json" not in entry_columns:
+            conn.exec_driver_sql("ALTER TABLE symptom_entries ADD COLUMN lifestyle_json TEXT DEFAULT '{}'")
 
 
 def get_db():

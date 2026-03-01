@@ -7,6 +7,7 @@ import ClinicianView from './pages/ClinicianView';
 import PatientSetup from './pages/PatientSetup';
 import HPOClusterView from './pages/HPOClusterView';
 import { listPatients, getFlareAlert } from './api';
+import theme from './theme';
 
 const DISEASE_COLORS = {
   POTS: { bg: '#1e3a8a', fg: '#bfdbfe' }, EDS: { bg: '#14532d', fg: '#bbf7d0' },
@@ -30,41 +31,42 @@ const GROUP_MAP = {
 };
 
 const s = {
-  app: { display: 'flex', minHeight: '100vh', background: '#0d1117', color: '#e6edf3', fontFamily: "'Inter', system-ui, -apple-system, sans-serif" },
-  sidebar: { width: 220, minHeight: '100vh', background: '#161b22', borderRight: '1px solid #21262d', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 100 },
-  logoArea: { padding: '24px 20px 20px', borderBottom: '1px solid #21262d' },
-  logoTitle: { fontSize: 18, fontWeight: 800, color: '#e6edf3', letterSpacing: '-0.5px' },
-  logoSub: { fontSize: 10, color: '#3fb950', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 2 },
+  app: { display: 'flex', minHeight: '100vh', background: theme.bg, color: theme.text, fontFamily: "'Inter', system-ui, -apple-system, sans-serif" },
+  sidebar: { width: 220, minHeight: '100vh', background: theme.panelGradient, borderRight: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 100, boxShadow: theme.shadowSoft },
+  logoArea: { padding: '24px 20px 20px', borderBottom: `1px solid ${theme.border}` },
+  logoTitle: { fontSize: 18, fontWeight: 800, color: theme.text, letterSpacing: '-0.5px' },
+  logoSub: { fontSize: 10, color: theme.teal, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 2 },
   navSection: { padding: '16px 0 0', flex: 1 },
-  navGroupLabel: { fontSize: 10, color: '#484f58', fontWeight: 700, letterSpacing: 1.5, padding: '4px 20px 8px', textTransform: 'uppercase' },
-  navItem: (active) => ({ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 20px', cursor: 'pointer', fontSize: 14, color: active ? '#e6edf3' : '#8b949e', fontWeight: active ? 600 : 400, background: active ? 'rgba(48,54,61,0.8)' : 'transparent', borderLeft: active ? '3px solid #3fb950' : '3px solid transparent', transition: 'all 0.15s', borderRadius: '0 8px 8px 0', marginRight: 8 }),
+  navGroupLabel: { fontSize: 10, color: theme.textMuted, fontWeight: 700, letterSpacing: 1.5, padding: '4px 20px 8px', textTransform: 'uppercase' },
+  navItem: (active) => ({ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 20px', cursor: 'pointer', fontSize: 14, color: active ? theme.text : theme.textMuted, fontWeight: active ? 600 : 400, background: active ? theme.tealBg : 'transparent', borderLeft: active ? `3px solid ${theme.teal}` : '3px solid transparent', transition: 'all 0.15s', borderRadius: '0 8px 8px 0', marginRight: 8 }),
   navIcon: { fontSize: 16, opacity: 0.8 },
-  patientArea: { padding: '16px 12px', borderTop: '1px solid #21262d' },
-  patientCard: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#21262d', borderRadius: 10, cursor: 'pointer' },
+  patientArea: { padding: '16px 12px', borderTop: `1px solid ${theme.border}` },
+  patientCard: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: theme.surfaceGradient, borderRadius: 10, cursor: 'pointer', boxShadow: theme.shadowSoft },
   patientAvatar: (d) => ({ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, background: DISEASE_COLORS[d]?.bg || '#1f6feb', color: DISEASE_COLORS[d]?.fg || '#fff' }),
-  patientName: { fontSize: 13, fontWeight: 600, color: '#e6edf3' },
-  patientSub: { fontSize: 11, color: '#3fb950' },
+  patientName: { fontSize: 13, fontWeight: 600, color: theme.text },
+  patientSub: { fontSize: 11, color: theme.teal },
   main: { marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' },
-  topBar: { height: 56, background: '#161b22', borderBottom: '1px solid #21262d', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, zIndex: 50 },
-  breadcrumb: { fontSize: 14, color: '#8b949e', display: 'flex', alignItems: 'center', gap: 6 },
-  breadcrumbActive: { color: '#e6edf3', fontWeight: 600 },
+  topBar: { height: 56, background: theme.panelGradient, borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, zIndex: 50 },
+  breadcrumb: { fontSize: 14, color: theme.textMuted, display: 'flex', alignItems: 'center', gap: 6 },
+  breadcrumbActive: { color: theme.text, fontWeight: 600 },
   topActions: { display: 'flex', gap: 8, alignItems: 'center' },
-  statusDot: { width: 8, height: 8, borderRadius: '50%', background: '#3fb950', display: 'inline-block', marginRight: 6, boxShadow: '0 0 8px #3fb950' },
-  statusBadge: { fontSize: 12, background: '#21262d', border: '1px solid #30363d', borderRadius: 8, padding: '5px 12px', color: '#8b949e', display: 'flex', alignItems: 'center' },
-  analyzeBtn: { fontSize: 12, background: 'linear-gradient(135deg, #3fb950, #1a7f37)', border: 'none', borderRadius: 8, padding: '7px 14px', color: '#fff', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 },
+  statusDot: { width: 8, height: 8, borderRadius: '50%', background: theme.teal, display: 'inline-block', marginRight: 6, boxShadow: `0 0 8px ${theme.teal}` },
+  statusBadge: { fontSize: 12, background: theme.surfaceAlt, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '5px 12px', color: theme.textMuted, display: 'flex', alignItems: 'center' },
+  analyzeBtn: { fontSize: 12, background: `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDeep})`, border: 'none', borderRadius: 8, padding: '7px 14px', color: '#fff', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 },
   // Language toggle
-  langToggleWrap: { display: 'flex', background: '#0d1117', border: '1px solid #30363d', borderRadius: 8, overflow: 'hidden' },
-  langBtn: (active) => ({ padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', background: active ? '#3fb950' : 'transparent', color: active ? '#0d1117' : '#8b949e', transition: 'all 0.15s' }),
+  langToggleWrap: { display: 'flex', background: theme.bg, border: `1px solid ${theme.border}`, borderRadius: 8, overflow: 'hidden' },
+  langBtn: (active) => ({ padding: '5px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', background: active ? theme.teal : 'transparent', color: active ? theme.bg : theme.textMuted, transition: 'all 0.15s' }),
   content: { padding: '32px', flex: 1 },
-  patientSelectRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28, background: '#161b22', border: '1px solid #21262d', borderRadius: 12, padding: '12px 20px' },
-  patientSelectLabel: { fontSize: 13, fontWeight: 600, color: '#8b949e' },
-  patientSelect: { flex: 1, padding: '8px 12px', border: '1px solid #30363d', borderRadius: 8, fontSize: 13, background: '#0d1117', color: '#e6edf3', outline: 'none' },
+  patientSelectRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28, background: theme.surfaceGradient, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '12px 20px', boxShadow: theme.shadowSoft },
+  patientSelectLabel: { fontSize: 13, fontWeight: 600, color: theme.textMuted },
+  patientSelect: { flex: 1, padding: '8px 12px', border: `1px solid ${theme.borderSoft}`, borderRadius: 8, fontSize: 13, background: theme.bg, color: theme.text, outline: 'none' },
   diseaseBadge: (d) => ({ padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: DISEASE_COLORS[d]?.bg || '#1f6feb', color: DISEASE_COLORS[d]?.fg || '#bfdbfe' }),
-  noPatient: { textAlign: 'center', padding: 80, color: '#484f58' },
+  noPatient: { textAlign: 'center', padding: 80, color: theme.textMuted },
 };
 
 // ─── Flare Alert Banner ────────────────────────────────────────────────────────
 function FlareAlertBanner({ alert }) {
+  const { t } = useLang();
   if (!alert) return null;
   const icons = { CRITICAL: '🔴', WARNING: '🟠', WATCH: '🟡', NORMAL: '🟢' };
   const icon = icons[alert.alert_level] || '⚪';
@@ -73,17 +75,17 @@ function FlareAlertBanner({ alert }) {
     <div style={{ background: `${color}12`, border: `1.5px solid ${color}`, borderRadius: 14, padding: '14px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 20 }}>
       <div style={{ textAlign: 'center', minWidth: 60, flexShrink: 0 }}>
         <div style={{ fontSize: 34, fontWeight: 900, color, lineHeight: 1 }}>{Math.round(alert.days_to_flare)}</div>
-        <div style={{ fontSize: 10, color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>days</div>
+        <div style={{ fontSize: 10, color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>{t.alertDays}</div>
       </div>
       <div style={{ width: 1, height: 44, background: color, opacity: 0.3, flexShrink: 0 }} />
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 13, fontWeight: 800, color }}>{icon} {alert.alert_level} — Flare Prediction</span>
-          <span style={{ fontSize: 10, background: `${color}22`, color, padding: '2px 8px', borderRadius: 20, fontWeight: 700 }}>{alert.confidence} CONFIDENCE</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color }}>{icon} {alert.alert_level} - {t.flarePrediction}</span>
+          <span style={{ fontSize: 10, background: `${color}22`, color, padding: '2px 8px', borderRadius: 20, fontWeight: 700 }}>{alert.confidence} {t.confidenceLabel}</span>
         </div>
-        <div style={{ fontSize: 13, color: '#c9d1d9', lineHeight: 1.6 }}>{alert.message}</div>
-        <div style={{ fontSize: 11, color: '#484f58', marginTop: 4 }}>
-          Based on risk: <strong style={{ color: '#8b949e' }}>{alert.based_on_risk}</strong> · Not a clinical diagnosis
+        <div style={{ fontSize: 13, color: theme.textSoft, lineHeight: 1.6 }}>{alert.message}</div>
+        <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>
+          {t.basedOnRisk} <strong style={{ color: theme.textMuted }}>{alert.based_on_risk}</strong> · {t.notClinicalDiagnosis}
         </div>
       </div>
       {alert.alert_level === 'CRITICAL' && (
@@ -112,22 +114,22 @@ function DashboardOverview({ patients, selectedPatient, setSelectedPatient, setP
   ];
 
   const c = {
-    pageTitle: { fontSize: 28, fontWeight: 800, color: '#e6edf3', margin: 0, letterSpacing: '-0.5px' },
-    pageSub: { fontSize: 14, color: '#484f58', marginTop: 4, marginBottom: 28 },
+    pageTitle: { fontSize: 28, fontWeight: 800, color: theme.text, margin: 0, letterSpacing: '-0.5px' },
+    pageSub: { fontSize: 14, color: theme.textMuted, marginTop: 4, marginBottom: 28 },
     kpiRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 },
-    kpiCard: { background: '#161b22', border: '1px solid #21262d', borderRadius: 14, padding: 24, position: 'relative', overflow: 'hidden' },
-    kpiLabel: { fontSize: 12, color: '#8b949e', marginBottom: 8 },
-    kpiValue: { fontSize: 32, fontWeight: 800, color: '#e6edf3' },
-    kpiSub: { fontSize: 12, color: '#3fb950', marginTop: 4, fontWeight: 600 },
-    kpiIcon: { position: 'absolute', top: 20, right: 20, fontSize: 28, opacity: 0.15 },
+    kpiCard: { background: theme.panelGradient, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 24, position: 'relative', overflow: 'hidden', boxShadow: theme.shadowGlow },
+    kpiLabel: { fontSize: 12, color: theme.textMuted, marginBottom: 8 },
+    kpiValue: { fontSize: 32, fontWeight: 800, color: theme.text },
+    kpiSub: { fontSize: 12, color: theme.teal, marginTop: 4, fontWeight: 600 },
+    kpiIcon: { position: 'absolute', top: 20, right: 20, fontSize: 28, opacity: 0.28, filter: 'saturate(1.15)' },
     bottom: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 },
-    card: { background: '#161b22', border: '1px solid #21262d', borderRadius: 14, padding: 24 },
-    cardTitle: { fontSize: 11, fontWeight: 700, color: '#484f58', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 },
-    actionBtn: (primary) => ({ width: '100%', padding: '13px 16px', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 10, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, background: primary ? 'linear-gradient(135deg, #3fb950, #1a7f37)' : '#21262d', color: primary ? '#fff' : '#c9d1d9', border: primary ? 'none' : '1px solid #30363d', transition: 'all 0.15s' }),
+    card: { background: theme.surfaceGradient, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 24, boxShadow: theme.shadowSoft },
+    cardTitle: { fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 },
+    actionBtn: (primary) => ({ width: '100%', padding: '13px 16px', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 10, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, background: primary ? `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDeep})` : theme.surfaceAlt, color: primary ? '#fff' : theme.textSoft, border: primary ? 'none' : `1px solid ${theme.border}`, transition: 'all 0.15s' }),
     activityItem: { display: 'flex', gap: 12, marginBottom: 16, alignItems: 'flex-start' },
-    activityDot: (status) => ({ width: 10, height: 10, borderRadius: '50%', marginTop: 5, flexShrink: 0, background: status === 'live' ? '#3fb950' : '#30363d', boxShadow: status === 'live' ? '0 0 8px #3fb950' : 'none' }),
-    activityTime: { fontSize: 11, color: '#8b949e', marginBottom: 2 },
-    activityLabel: { fontSize: 13, color: '#c9d1d9', fontWeight: 500 },
+    activityDot: (status) => ({ width: 10, height: 10, borderRadius: '50%', marginTop: 5, flexShrink: 0, background: status === 'live' ? theme.teal : theme.border, boxShadow: status === 'live' ? `0 0 8px ${theme.teal}` : 'none' }),
+    activityTime: { fontSize: 11, color: theme.textMuted, marginBottom: 2 },
+    activityLabel: { fontSize: 13, color: theme.textSoft, fontWeight: 500 },
   };
 
   return (
@@ -168,7 +170,7 @@ function DashboardOverview({ patients, selectedPatient, setSelectedPatient, setP
           <span style={c.kpiIcon}>🏥</span>
           <div style={c.kpiLabel}>{t.kpiHPOTerms}</div>
           <div style={c.kpiValue}>3+</div>
-          <div style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600, marginTop: 4 }}>HP:0002829, HP:0012378 +1</div>
+          <div style={{ fontSize: 11, color: theme.amber, fontWeight: 600, marginTop: 4 }}>{t.kpiHpoExample}</div>
         </div>
       </div>
 
@@ -223,14 +225,14 @@ export default function App() {
   const PAGE_LABEL_KEYS = {
     dashboard: t.navDashboard, setup: t.navPatientProfile,
     input: t.navLogSymptoms, signals: t.navHistory, clinician: t.navClinicianView,
-    hpo_cluster: 'HPO Cluster Map'
+    hpo_cluster: t.navHpoCluster
   };
 
   const NAV_ITEMS = [
     { id: 'dashboard', label: t.navDashboard, icon: '⬡', group: 'CORE' },
     { id: 'setup', label: t.navPatientProfile, icon: '◎', group: 'CORE' },
     { id: 'clinician', label: t.navClinicianView, icon: '◇', group: 'ANALYSIS' },
-    { id: 'hpo_cluster', label: 'HPO Cluster Map', icon: '✱', group: 'ANALYSIS' },
+    { id: 'hpo_cluster', label: t.navHpoCluster, icon: '✱', group: 'ANALYSIS' },
     { id: 'input', label: t.navLogSymptoms, icon: '△', group: 'MONITORING' },
     { id: 'signals', label: t.navHistory, icon: '▷', group: 'MONITORING' },
   ];
@@ -267,15 +269,15 @@ export default function App() {
               </div>
               <div>
                 <div style={s.patientName}>{selectedPatient.id}</div>
-                <div style={s.patientSub}>{selectedPatient.disease} · Active</div>
+                <div style={s.patientSub}>{selectedPatient.disease} · {t.patientStatusActive}</div>
               </div>
             </div>
           ) : (
             <div style={{ ...s.patientCard, cursor: 'default', opacity: 0.5 }}>
-              <div style={{ ...s.patientAvatar(''), background: '#21262d', color: '#8b949e' }}>?</div>
+              <div style={{ ...s.patientAvatar(''), background: theme.surfaceAlt, color: theme.textMuted }}>?</div>
               <div>
                 <div style={s.patientName}>{t.noPatient}</div>
-                <div style={{ fontSize: 11, color: '#484f58' }}>{t.noPatientSub}</div>
+                <div style={{ fontSize: 11, color: theme.textMuted }}>{t.noPatientSub}</div>
               </div>
             </div>
           )}
@@ -287,7 +289,7 @@ export default function App() {
         <header style={s.topBar}>
           <div style={s.breadcrumb}>
             {t.breadcrumbDashboard}
-            <span style={{ color: '#30363d' }}>›</span>
+            <span style={{ color: theme.border }}>›</span>
             <span style={s.breadcrumbActive}>{PAGE_LABEL_KEYS[page]}</span>
           </div>
           <div style={s.topActions}>

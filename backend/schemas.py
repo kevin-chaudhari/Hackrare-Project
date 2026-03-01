@@ -1,6 +1,6 @@
 # schemas.py — Pydantic request/response schemas
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal
 from datetime import datetime
 
 
@@ -9,10 +9,16 @@ from datetime import datetime
 class PatientCreate(BaseModel):
     id: str = Field(..., description="Unique patient identifier (UUID or alias)")
     disease: str = Field(..., description="Disease abbreviation or identifier")
+    uses_wearable: Optional[bool] = Field(default=None, description="Whether the patient uses a wearable or sensor")
+    wearable_device_type: Optional[str] = Field(default=None, description="Type of wearable or sensor device")
+    wants_wearable_link: Optional[bool] = Field(default=None, description="Whether the patient wants to link the device")
 
 class PatientResponse(BaseModel):
     id: str
     disease: str
+    uses_wearable: Optional[bool] = None
+    wearable_device_type: Optional[str] = None
+    wants_wearable_link: Optional[bool] = None
     created_at: datetime
 
     class Config:
@@ -29,6 +35,7 @@ class SymptomEntryCreate(BaseModel):
         description="Symptom name → severity score 0-10"
     )
     triggers: List[str] = Field(default=[], description="Active triggers")
+    lifestyle_context: Dict[str, Any] = Field(default_factory=dict, description="Structured context that may help explain symptom changes")
     notes: Optional[str] = None
 
 class SymptomEntryResponse(BaseModel):
@@ -37,6 +44,7 @@ class SymptomEntryResponse(BaseModel):
     timestamp: datetime
     symptoms: Dict[str, float]
     triggers: List[str]
+    lifestyle_context: Dict[str, Any] = Field(default_factory=dict)
     notes: Optional[str]
 
     class Config:
@@ -204,3 +212,27 @@ class PatientHistoryResponse(BaseModel):
     history: List[SignalHistoryPoint]
     total_entries: int
     days_tracked: int
+
+
+# ─── Sensor Streams ───────────────────────────────────────────────────────────
+
+class SensorStreamSummaryResponse(BaseModel):
+    patient_id: str
+    linked: bool
+    device_type: Optional[str] = None
+    stream_source: Optional[str] = None
+    collected_at: Optional[datetime] = None
+    sample_count: int = 0
+    duration_minutes: int = 0
+    heart_rate_avg: Optional[float] = None
+    heart_rate_resting: Optional[float] = None
+    heart_rate_max: Optional[float] = None
+    hrv_rmssd: Optional[float] = None
+    spo2_avg: Optional[float] = None
+    skin_temp_avg: Optional[float] = None
+    activity_load: Optional[float] = None
+    recovery_score: Optional[float] = None
+    stress_load: Optional[float] = None
+    signal_quality: Optional[str] = None
+    insights: List[str] = []
+    alerts: List[str] = []
