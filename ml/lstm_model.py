@@ -174,6 +174,15 @@ class RareSignalModel(nn.Module):
         self.fis_regressor = nn.Linear(128, 5)         # [mobility, cog, sleep, work, social]
         self.forecast_head = nn.Linear(128, 3)         # 3-day composite severity forecast
 
+        # 10. Flare prediction head: days-to-next-flare in [0, 30]
+        self.flare_head = nn.Sequential(
+            nn.Linear(128, 32),
+            nn.ReLU(),
+            nn.Dropout(dropout * 0.5),
+            nn.Linear(32, 1),
+            nn.Sigmoid()   # output in [0, 1], will be scaled to [0, 30] days
+        )
+
         self._init_weights()
 
     def _init_weights(self):
@@ -232,10 +241,11 @@ class RareSignalModel(nn.Module):
         hidden = self.fusion(fused)                                 # [B, 128]
 
         return {
-            "risk_logits": self.risk_classifier(hidden),           # [B, 4]
+            "risk_logits": self.risk_classifier(hidden),              # [B, 4]
             "fis_scores": torch.sigmoid(self.fis_regressor(hidden)),  # [B, 5]
-            "forecast": self.forecast_head(hidden),                # [B, 3]
-            "trigger_attention": trigger_attn_weights              # [B, 1, n_trig]
+            "forecast": self.forecast_head(hidden),                   # [B, 3]
+            "flare_days": self.flare_head(hidden).squeeze(-1) * 30.0, # [B] in [0, 30]
+            "trigger_attention": trigger_attn_weights                 # [B, 1, n_trig]
         }
 
     @torch.no_grad()

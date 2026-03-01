@@ -284,7 +284,12 @@ class RareSignalDataset(Dataset):
             "hpo_multihot": torch.tensor(hpo_multihot),
             "risk_label": torch.tensor(risk_label, dtype=torch.long),
             "fis_target": torch.tensor(fis_targets),
-            "forecast_target": torch.tensor(forecast_target)
+            "forecast_target": torch.tensor(forecast_target),
+            # Synthetic days-to-flare: CRITICAL~2d, HIGH~8d, MODERATE~15d, LOW~25d
+            "flare_target": torch.tensor(
+                {0: 25.0, 1: 15.0, 2: 8.0, 3: 2.0}.get(risk_label, 25.0),
+                dtype=torch.float32
+            )
         }
 
     def __len__(self):
@@ -337,6 +342,7 @@ def train(
     criterion_risk = FocalLoss(alpha=risk_weights, gamma=2.0)
     criterion_fis = nn.HuberLoss(delta=0.1)
     criterion_forecast = nn.HuberLoss(delta=0.5)
+    criterion_flare = nn.HuberLoss(delta=2.0)   # days-to-flare, larger scale
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
@@ -370,7 +376,8 @@ def train(
             l_risk = criterion_risk(out["risk_logits"], batch["risk_label"].to(device))
             l_fis = criterion_fis(out["fis_scores"], batch["fis_target"].to(device))
             l_fore = criterion_forecast(out["forecast"], batch["forecast_target"].to(device))
-            loss = 0.5 * l_risk + 0.3 * l_fis + 0.2 * l_fore
+            l_flare = criterion_flare(out["flare_days"], batch["flare_target"].to(device))
+            loss = 0.45 * l_risk + 0.25 * l_fis + 0.15 * l_fore + 0.15 * l_flare
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
@@ -393,7 +400,8 @@ def train(
                 l_risk = criterion_risk(out["risk_logits"], batch["risk_label"].to(device))
                 l_fis = criterion_fis(out["fis_scores"], batch["fis_target"].to(device))
                 l_fore = criterion_forecast(out["forecast"], batch["forecast_target"].to(device))
-                val_loss += (0.5 * l_risk + 0.3 * l_fis + 0.2 * l_fore).item()
+                l_flare = criterion_flare(out["flare_days"], batch["flare_target"].to(device))
+                val_loss += (0.45 * l_risk + 0.25 * l_fis + 0.15 * l_fore + 0.15 * l_flare).item()
                 preds = out["risk_logits"].argmax(dim=-1).cpu().tolist()
                 labels = batch["risk_label"].tolist()
                 all_preds.extend(preds)

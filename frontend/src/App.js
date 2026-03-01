@@ -5,7 +5,8 @@ import PatientDashboard from './pages/PatientDashboard';
 import SignalVisualization from './pages/SignalVisualization';
 import ClinicianView from './pages/ClinicianView';
 import PatientSetup from './pages/PatientSetup';
-import { listPatients } from './api';
+import HPOClusterView from './pages/HPOClusterView';
+import { listPatients, getFlareAlert } from './api';
 
 const DISEASE_COLORS = {
   POTS: { bg: '#1e3a8a', fg: '#bfdbfe' }, EDS: { bg: '#14532d', fg: '#bbf7d0' },
@@ -62,9 +63,47 @@ const s = {
   noPatient: { textAlign: 'center', padding: 80, color: '#484f58' },
 };
 
+// ─── Flare Alert Banner ────────────────────────────────────────────────────────
+function FlareAlertBanner({ alert }) {
+  if (!alert) return null;
+  const icons = { CRITICAL: '🔴', WARNING: '🟠', WATCH: '🟡', NORMAL: '🟢' };
+  const icon = icons[alert.alert_level] || '⚪';
+  const color = alert.alert_color;
+  return (
+    <div style={{ background: `${color}12`, border: `1.5px solid ${color}`, borderRadius: 14, padding: '14px 24px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 20 }}>
+      <div style={{ textAlign: 'center', minWidth: 60, flexShrink: 0 }}>
+        <div style={{ fontSize: 34, fontWeight: 900, color, lineHeight: 1 }}>{Math.round(alert.days_to_flare)}</div>
+        <div style={{ fontSize: 10, color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>days</div>
+      </div>
+      <div style={{ width: 1, height: 44, background: color, opacity: 0.3, flexShrink: 0 }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color }}>{icon} {alert.alert_level} — Flare Prediction</span>
+          <span style={{ fontSize: 10, background: `${color}22`, color, padding: '2px 8px', borderRadius: 20, fontWeight: 700 }}>{alert.confidence} CONFIDENCE</span>
+        </div>
+        <div style={{ fontSize: 13, color: '#c9d1d9', lineHeight: 1.6 }}>{alert.message}</div>
+        <div style={{ fontSize: 11, color: '#484f58', marginTop: 4 }}>
+          Based on risk: <strong style={{ color: '#8b949e' }}>{alert.based_on_risk}</strong> · Not a clinical diagnosis
+        </div>
+      </div>
+      {alert.alert_level === 'CRITICAL' && (
+        <div style={{ width: 12, height: 12, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: `0 0 12px ${color}, 0 0 24px ${color}40` }} />
+      )}
+    </div>
+  );
+}
+
 // ─── Dashboard Overview Page ─────────────────────────────────────────────────
 function DashboardOverview({ patients, selectedPatient, setSelectedPatient, setPage }) {
   const { t } = useLang();
+  const [flareAlert, setFlareAlert] = useState(null);
+
+  useEffect(() => {
+    if (!selectedPatient) { setFlareAlert(null); return; }
+    getFlareAlert(selectedPatient.id)
+      .then(res => setFlareAlert(res.data))
+      .catch(() => setFlareAlert(null));
+  }, [selectedPatient?.id]);
 
   const activity = [
     { time: t.activityJustNow, label: t.activitySession, status: 'live' },
@@ -97,7 +136,7 @@ function DashboardOverview({ patients, selectedPatient, setSelectedPatient, setP
       <div style={c.pageSub}>{t.overviewSub}</div>
 
       {patients.length > 0 && (
-        <div style={{ ...s.patientSelectRow, marginBottom: 28 }}>
+        <div style={{ ...s.patientSelectRow, marginBottom: 24 }}>
           <span style={s.patientSelectLabel}>{t.activePatient}</span>
           <select style={s.patientSelect} value={selectedPatient?.id || ''} onChange={e => {
             const p = patients.find(pt => pt.id === e.target.value);
@@ -108,6 +147,9 @@ function DashboardOverview({ patients, selectedPatient, setSelectedPatient, setP
           {selectedPatient && <span style={s.diseaseBadge(selectedPatient.disease)}>{selectedPatient.disease}</span>}
         </div>
       )}
+
+      {/* Flare Alert Banner */}
+      <FlareAlertBanner alert={flareAlert} />
 
       <div style={c.kpiRow}>
         <div style={c.kpiCard}>
@@ -180,13 +222,15 @@ export default function App() {
 
   const PAGE_LABEL_KEYS = {
     dashboard: t.navDashboard, setup: t.navPatientProfile,
-    input: t.navLogSymptoms, signals: t.navHistory, clinician: t.navClinicianView
+    input: t.navLogSymptoms, signals: t.navHistory, clinician: t.navClinicianView,
+    hpo_cluster: 'HPO Cluster Map'
   };
 
   const NAV_ITEMS = [
     { id: 'dashboard', label: t.navDashboard, icon: '⬡', group: 'CORE' },
     { id: 'setup', label: t.navPatientProfile, icon: '◎', group: 'CORE' },
     { id: 'clinician', label: t.navClinicianView, icon: '◇', group: 'ANALYSIS' },
+    { id: 'hpo_cluster', label: 'HPO Cluster Map', icon: '✱', group: 'ANALYSIS' },
     { id: 'input', label: t.navLogSymptoms, icon: '△', group: 'MONITORING' },
     { id: 'signals', label: t.navHistory, icon: '▷', group: 'MONITORING' },
   ];
@@ -302,6 +346,9 @@ export default function App() {
             selectedPatient
               ? <ClinicianView patient={selectedPatient} />
               : <div style={s.noPatient}><p>{t.noPatientOption}</p></div>
+          )}
+          {page === 'hpo_cluster' && (
+            <HPOClusterView patient={selectedPatient} />
           )}
         </div>
       </main>

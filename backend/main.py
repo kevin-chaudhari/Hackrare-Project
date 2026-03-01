@@ -17,6 +17,8 @@ from backend.schemas import (
     RiskPredictionRequest, RiskPredictionResponse,
     SummaryRequest, ClinicalSummaryResponse,
     DetailedReportRequest, DetailedReportResponse,
+    HPOMatchRequest, HPOMatchResponse, HPOMatchResult,
+    FlareAlertResponse,
     PatientHistoryResponse, SignalHistoryPoint
 )
 from backend.signal_engine import (
@@ -24,6 +26,7 @@ from backend.signal_engine import (
 )
 from backend.summary_generator import generate_structured_summary, generate_detailed_ai_report
 from backend.disease_config import DISEASE_CONFIGS
+from backend.hpo_matcher import match_symptom, get_disease_hpo_cluster
 
 
 # ─── App Lifecycle ─────────────────────────────────────────────────────────────
@@ -492,13 +495,115 @@ def generate_summary(body: SummaryRequest, db: Session = Depends(get_db)):
 def generate_ai_explainer(body: DetailedReportRequest, db: Session = Depends(get_db)):
     # Authenticate via patient check
     _get_patient_or_404(body.patient_id, db)
-    
     report_text = generate_detailed_ai_report(
         patient_id=body.patient_id,
         disease_name=body.disease_name,
         deviations=body.deviations
     )
     return DetailedReportResponse(report_text=report_text)
+
+
+# ─── Semantic HPO Matching ──────────────────────────────────────────────────────
+
+@app.post("/match-hpo", response_model=HPOMatchResponse, tags=["HPO"])
+def semantic_hpo_match(body: HPOMatchRequest):
+    """
+    Semantically match a symptom key or free text to the nearest HPO term(s)
+    using TF-IDF cosine similarity.
+    """
+    raw_matches = match_symptom(body.symptom_text, body.disease_id, body.top_k)
+    return HPOMatchResponse(
+        query=body.symptom_text,
+        disease_id=body.disease_id,
+        matches=[HPOMatchResult(**m) for m in raw_matches]
+    )
+
+
+@app.get("/diseases/{disease_id}/hpo-cluster", tags=["HPO"])
+def disease_hpo_cluster(disease_id: str):
+    """
+    Return the full HPO semantic cluster for a disease —
+    each symptom mapped to its closest HPO term and semantic neighbors.
+    """
+    if disease_id not in DISEASE_CONFIGS:
+        raise HTTPException(404, f"Disease '{disease_id}' not found")
+    return {"disease_id": disease_id, "cluster": get_disease_hpo_cluster(disease_id)}
+
+
+# ─── Flare / Seizure Prediction Alert ─────────────────────────────────────────
+
+@app.get("/flare-alert/{patient_id}", response_model=FlareAlertResponse, tags=["Alerts"])
+def get_flare_alert(patient_id: str, db: Session = Depends(get_db)):
+    """
+    Predict days-to-next-flare for a patient using their latest computed signal.
+    Derives a probability-weighted estimate from:
+      - most recent risk category
+      - symptom volatility index
+      - z-score magnitude of primary deviations
+    Returns an alert level and a user-visible message.
+    """
+    patient = _get_patient_or_404(patient_id, db)
+
+    # Fetch latest computed signal
+    latest_signal = (
+        db.query(ComputedSignal)
+        .filter(ComputedSignal.patient_id == patient_id)
+        .order_by(ComputedSignal.computed_at.desc())
+        .first()
+    )
+
+    if not latest_signal:
+        return FlareAlertResponse(
+            patient_id=patient_id,
+            days_to_flare=30.0,
+            alert_level="NORMAL",
+            alert_color="#3fb950",
+            message="No signals computed yet. Log symptoms to enable flare prediction.",
+            confidence="LOW",
+            based_on_risk="INSUFFICIENT_DATA"
+        )
+
+    risk = latest_signal.risk_category or "INSUFFICIENT_DATA"
+    volatility = latest_signal.volatility_index or 0.0
+    z_max = latest_signal.z_score_max or 0.0
+
+    # Derive days-to-flare heuristic:
+    # Base window from risk, refined by volatility and z-score magnitude
+    base = {"CRITICAL": 2.0, "HIGH": 7.0, "MODERATE": 14.0, "LOW": 25.0, "INSUFFICIENT_DATA": 30.0}
+    days = base.get(risk, 30.0)
+
+    # Volatility shifts prediction earlier (high volatility = sooner flare)
+    vol_adjustment = min(volatility * 5.0, 10.0)  # cap at -10 days
+    z_adjustment = min(max(z_max - 1.0, 0.0) * 2.0, 8.0)  # z>1 → earlier
+    days = max(1.0, days - vol_adjustment - z_adjustment)
+
+    # Confidence: measured by how much data we have
+    entry_count = db.query(SymptomEntry).filter(SymptomEntry.patient_id == patient_id).count()
+    confidence = "HIGH" if entry_count >= 14 else "MODERATE" if entry_count >= 7 else "LOW"
+
+    # Alert level thresholds
+    if days <= 5:
+        level, color = "CRITICAL", "#f85149"
+        msg = f"Flare predicted in ~{days:.0f} day(s). Recommend urgent symptom review and care team contact."
+    elif days <= 10:
+        level, color = "WARNING", "#d29922"
+        msg = f"Elevated flare risk — estimated ~{days:.0f} days. Consider proactive symptom logging."
+    elif days <= 20:
+        level, color = "WATCH", "#e3b341"
+        msg = f"Flare may occur in ~{days:.0f} days. Maintain daily symptom tracking."
+    else:
+        level, color = "NORMAL", "#3fb950"
+        msg = f"Low flare risk. Next predicted flare in ~{days:.0f} days. Keep up routine monitoring."
+
+    return FlareAlertResponse(
+        patient_id=patient_id,
+        days_to_flare=round(days, 1),
+        alert_level=level,
+        alert_color=color,
+        message=msg,
+        confidence=confidence,
+        based_on_risk=risk
+    )
 
 
 # ─── History ────────────────────────────────────────────────────────────────────

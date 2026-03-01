@@ -40,4 +40,16 @@ export const listDiseases = () => api.get('/diseases');
 export const getDiseaseConfig = (diseaseId) =>
   api.get(`/diseases/${diseaseId}`);
 
+// ── Semantic HPO Matching ──────────────────────────────────────────────────────
+export const matchHPO = (symptomText, diseaseId = null, topK = 3) =>
+  api.post('/match-hpo', { symptom_text: symptomText, disease_id: diseaseId, top_k: topK });
+
+export const getHpoCluster = (diseaseId) =>
+  api.get(`/diseases/${diseaseId}/hpo-cluster`);
+
+// ── Flare / Seizure Prediction Alert ──────────────────────────────────────────
+export const getFlareAlert = (patientId) =>
+  api.get(`/flare-alert/${patientId}`);
+
 export default api;
+

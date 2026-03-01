@@ -157,6 +157,37 @@ class DetailedReportRequest(BaseModel):
 class DetailedReportResponse(BaseModel):
     report_text: str
 
+
+# ─── HPO Semantic Matching ────────────────────────────────────────────────────
+
+class HPOMatchRequest(BaseModel):
+    symptom_text: str
+    disease_id: Optional[str] = None
+    top_k: int = 3
+
+class HPOMatchResult(BaseModel):
+    hpo_id: str
+    label: str
+    score: float
+
+class HPOMatchResponse(BaseModel):
+    query: str
+    disease_id: Optional[str]
+    matches: List[HPOMatchResult]
+
+
+# ─── Flare Alert ─────────────────────────────────────────────────────────────
+
+class FlareAlertResponse(BaseModel):
+    patient_id: str
+    days_to_flare: float          # predicted days until next flare (0-30)
+    alert_level: str              # CRITICAL | WARNING | WATCH | NORMAL
+    alert_color: str              # hex color for UI
+    message: str
+    confidence: str               # HIGH | MODERATE | LOW
+    based_on_risk: str            # current risk category used for derivation
+
+
 # ─── History ─────────────────────────────────────────────────────────────────
 
 class SignalHistoryPoint(BaseModel):
