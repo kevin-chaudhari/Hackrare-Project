@@ -1,4 +1,4 @@
-// src/App.js — RareSignal AI — Premium Sidebar Layout with i18n
+// src/App.js — RareSignal AI — Premium Sidebar Layout with i18n + 3D Ambient
 import React, { useState, useEffect } from 'react';
 import { useLang } from './i18n/LanguageContext';
 import PatientDashboard from './pages/PatientDashboard';
@@ -6,6 +6,7 @@ import SignalVisualization from './pages/SignalVisualization';
 import ClinicianView from './pages/ClinicianView';
 import PatientSetup from './pages/PatientSetup';
 import HPOClusterView from './pages/HPOClusterView';
+import HealthReport from './pages/HealthReport';
 import { listPatients, getFlareAlert } from './api';
 import theme from './theme';
 
@@ -23,15 +24,81 @@ const DISEASE_COLORS = {
   RRP: { bg: '#2d0a0a', fg: '#f87171' }, PRION: { bg: '#0c0a09', fg: '#a8a29e' },
 };
 
-const NAV_PAGE_IDS = ['dashboard', 'setup', 'input', 'signals', 'clinician'];
+const NAV_PAGE_IDS = ['dashboard', 'setup', 'input', 'signals', 'clinician', 'health_report'];
 const GROUP_MAP = {
   dashboard: 'CORE', setup: 'CORE',
   clinician: 'ANALYSIS',
-  input: 'MONITORING', signals: 'MONITORING',
+  input: 'MONITORING', signals: 'MONITORING', health_report: 'MONITORING',
 };
 
+// ─── Global 3D keyframes injected once ──────────────────────────────────────
+const GLOBAL_STYLE_ID = 'raresignal-3d-styles';
+if (!document.getElementById(GLOBAL_STYLE_ID)) {
+  const st = document.createElement('style');
+  st.id = GLOBAL_STYLE_ID;
+  st.textContent = `
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    *, *::before, *::after { box-sizing: border-box; }
+    @keyframes orbFloat1 {
+      0%,100% { transform: translate(0,0) scale(1); }
+      33%      { transform: translate(60px,-40px) scale(1.08); }
+      66%      { transform: translate(-30px,50px) scale(0.95); }
+    }
+    @keyframes orbFloat2 {
+      0%,100% { transform: translate(0,0) scale(1); }
+      40%      { transform: translate(-70px,60px) scale(1.12); }
+      70%      { transform: translate(40px,-30px) scale(0.9); }
+    }
+    @keyframes orbFloat3 {
+      0%,100% { transform: translate(0,0) scale(1); }
+      50%      { transform: translate(50px,40px) scale(1.05); }
+    }
+    @keyframes kpiPulse {
+      0%,100% { box-shadow: 0 14px 36px rgba(0,0,0,0.36),0 0 0 1px rgba(110,207,195,0.06); }
+      50%      { box-shadow: 0 18px 48px rgba(0,0,0,0.4),0 0 24px rgba(95,179,162,0.12),0 0 0 1px rgba(110,207,195,0.1); }
+    }
+    @keyframes borderGlow {
+      0%,100% { border-color: rgba(95,179,162,0.18); }
+      50%      { border-color: rgba(95,179,162,0.4); }
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+// ─── Ambient floating orbs (rendered behind main content) ────────────────────
+function AmbientOrbs() {
+  return (
+    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 0 }}>
+      {/* Teal orb — top-right */}
+      <div style={{
+        position: 'absolute', top: '5%', right: '8%',
+        width: 520, height: 520, borderRadius: '50%',
+        background: `radial-gradient(ellipse, rgba(95,179,162,0.13) 0%, transparent 70%)`,
+        filter: 'blur(40px)',
+        animation: 'orbFloat1 18s ease-in-out infinite',
+      }} />
+      {/* Amber orb — bottom-left */}
+      <div style={{
+        position: 'absolute', bottom: '10%', left: '12%',
+        width: 420, height: 420, borderRadius: '50%',
+        background: `radial-gradient(ellipse, rgba(244,183,64,0.10) 0%, transparent 70%)`,
+        filter: 'blur(50px)',
+        animation: 'orbFloat2 22s ease-in-out infinite',
+      }} />
+      {/* Violet orb — center */}
+      <div style={{
+        position: 'absolute', top: '40%', left: '38%',
+        width: 300, height: 300, borderRadius: '50%',
+        background: `radial-gradient(ellipse, rgba(155,138,255,0.07) 0%, transparent 70%)`,
+        filter: 'blur(60px)',
+        animation: 'orbFloat3 28s ease-in-out infinite',
+      }} />
+    </div>
+  );
+}
+
 const s = {
-  app: { display: 'flex', minHeight: '100vh', background: theme.bg, color: theme.text, fontFamily: "'Inter', system-ui, -apple-system, sans-serif" },
+  app: { display: 'flex', minHeight: '100vh', background: theme.bg, color: theme.text, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", position: 'relative' },
   sidebar: { width: 220, minHeight: '100vh', background: theme.panelGradient, borderRight: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 100, boxShadow: theme.shadowSoft },
   logoArea: { padding: '24px 20px 20px', borderBottom: `1px solid ${theme.border}` },
   logoTitle: { fontSize: 18, fontWeight: 800, color: theme.text, letterSpacing: '-0.5px' },
@@ -113,21 +180,59 @@ function DashboardOverview({ patients, selectedPatient, setSelectedPatient, setP
     { time: t.activityWaiting, label: t.activitySymptoms, status: 'wait' },
   ];
 
+  const [hoveredKpi, setHoveredKpi] = useState(null);
+
+  const kpiGlows = [
+    `radial-gradient(ellipse at top right, rgba(95,179,162,0.18), transparent 60%)`,
+    `radial-gradient(ellipse at top right, rgba(244,183,64,0.14), transparent 60%)`,
+    `radial-gradient(ellipse at top right, rgba(63,185,80,0.14), transparent 60%)`,
+  ];
+
   const c = {
     pageTitle: { fontSize: 28, fontWeight: 800, color: theme.text, margin: 0, letterSpacing: '-0.5px' },
     pageSub: { fontSize: 14, color: theme.textMuted, marginTop: 4, marginBottom: 28 },
     kpiRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 28 },
-    kpiCard: { background: theme.panelGradient, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 24, position: 'relative', overflow: 'hidden', boxShadow: theme.shadowGlow },
-    kpiLabel: { fontSize: 12, color: theme.textMuted, marginBottom: 8 },
-    kpiValue: { fontSize: 32, fontWeight: 800, color: theme.text },
-    kpiSub: { fontSize: 12, color: theme.teal, marginTop: 4, fontWeight: 600 },
-    kpiIcon: { position: 'absolute', top: 20, right: 20, fontSize: 28, opacity: 0.28, filter: 'saturate(1.15)' },
+    kpiCard: (i) => ({
+      background: theme.glass,
+      backdropFilter: 'blur(14px)',
+      WebkitBackdropFilter: 'blur(14px)',
+      border: `1px solid ${hoveredKpi === i ? theme.borderGlow : theme.border}`,
+      borderRadius: 16,
+      padding: 24,
+      position: 'relative',
+      overflow: 'hidden',
+      boxShadow: hoveredKpi === i ? theme.shadowFloat : theme.shadow3d,
+      transform: hoveredKpi === i ? 'perspective(600px) translateY(-4px) rotateX(1.5deg)' : 'perspective(600px) translateY(0) rotateX(0)',
+      transition: 'all 0.25s ease',
+      cursor: 'default',
+      animation: 'borderGlow 4s ease-in-out infinite',
+    }),
+    kpiGlow: (i) => ({
+      position: 'absolute', inset: 0,
+      background: kpiGlows[i],
+      pointerEvents: 'none',
+    }),
+    kpiShine: {
+      position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.09), transparent)',
+      pointerEvents: 'none',
+    },
+    kpiLabel: { fontSize: 12, color: theme.textMuted, marginBottom: 8, position: 'relative' },
+    kpiValue: { fontSize: 32, fontWeight: 800, color: theme.text, position: 'relative' },
+    kpiSub: { fontSize: 12, color: theme.teal, marginTop: 4, fontWeight: 600, position: 'relative' },
+    kpiIcon: { position: 'absolute', top: 20, right: 20, fontSize: 28, opacity: 0.22, filter: 'saturate(1.3)' },
     bottom: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 },
-    card: { background: theme.surfaceGradient, border: `1px solid ${theme.border}`, borderRadius: 14, padding: 24, boxShadow: theme.shadowSoft },
+    card: {
+      background: theme.glass,
+      backdropFilter: 'blur(10px)',
+      WebkitBackdropFilter: 'blur(10px)',
+      border: `1px solid ${theme.border}`,
+      borderRadius: 14, padding: 24, boxShadow: theme.shadow3d,
+    },
     cardTitle: { fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 },
-    actionBtn: (primary) => ({ width: '100%', padding: '13px 16px', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 10, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, background: primary ? `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDeep})` : theme.surfaceAlt, color: primary ? '#fff' : theme.textSoft, border: primary ? 'none' : `1px solid ${theme.border}`, transition: 'all 0.15s' }),
+    actionBtn: (primary) => ({ width: '100%', padding: '13px 16px', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 10, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10, background: primary ? `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDeep})` : theme.surfaceAlt, color: primary ? '#fff' : theme.textSoft, border: primary ? 'none' : `1px solid ${theme.border}`, transition: 'all 0.15s', boxShadow: primary ? '0 4px 14px rgba(63,185,80,0.28)' : 'none' }),
     activityItem: { display: 'flex', gap: 12, marginBottom: 16, alignItems: 'flex-start' },
-    activityDot: (status) => ({ width: 10, height: 10, borderRadius: '50%', marginTop: 5, flexShrink: 0, background: status === 'live' ? theme.teal : theme.border, boxShadow: status === 'live' ? `0 0 8px ${theme.teal}` : 'none' }),
+    activityDot: (status) => ({ width: 10, height: 10, borderRadius: '50%', marginTop: 5, flexShrink: 0, background: status === 'live' ? theme.teal : theme.border, boxShadow: status === 'live' ? `0 0 10px ${theme.teal}` : 'none' }),
     activityTime: { fontSize: 11, color: theme.textMuted, marginBottom: 2 },
     activityLabel: { fontSize: 13, color: theme.textSoft, fontWeight: 500 },
   };
@@ -154,24 +259,37 @@ function DashboardOverview({ patients, selectedPatient, setSelectedPatient, setP
       <FlareAlertBanner alert={flareAlert} />
 
       <div style={c.kpiRow}>
-        <div style={c.kpiCard}>
-          <span style={c.kpiIcon}>🧬</span>
-          <div style={c.kpiLabel}>{t.kpiActivePatients}</div>
-          <div style={c.kpiValue}>{patients.length}</div>
-          <div style={c.kpiSub}>{patients.length > 0 ? t.kpiActivePatientsSub : t.kpiSetupFirst}</div>
-        </div>
-        <div style={c.kpiCard}>
-          <span style={c.kpiIcon}>🔬</span>
-          <div style={c.kpiLabel}>{t.kpiDiseaseProfile}</div>
-          <div style={{ ...c.kpiValue, fontSize: selectedPatient ? 22 : 32 }}>{selectedPatient?.disease || '—'}</div>
-          <div style={c.kpiSub}>{selectedPatient ? t.kpiDiseaseProfileActive : t.kpiDiseaseProfileNone}</div>
-        </div>
-        <div style={c.kpiCard}>
-          <span style={c.kpiIcon}>🏥</span>
-          <div style={c.kpiLabel}>{t.kpiHPOTerms}</div>
-          <div style={c.kpiValue}>3+</div>
-          <div style={{ fontSize: 11, color: theme.amber, fontWeight: 600, marginTop: 4 }}>{t.kpiHpoExample}</div>
-        </div>
+        {[{
+          icon: '🧬', label: t.kpiActivePatients,
+          value: patients.length,
+          sub: patients.length > 0 ? t.kpiActivePatientsSub : t.kpiSetupFirst,
+          subColor: theme.teal,
+        }, {
+          icon: '🔬', label: t.kpiDiseaseProfile,
+          value: selectedPatient?.disease || '—',
+          valueFontSize: selectedPatient ? 22 : 32,
+          sub: selectedPatient ? t.kpiDiseaseProfileActive : t.kpiDiseaseProfileNone,
+          subColor: theme.teal,
+        }, {
+          icon: '🏥', label: t.kpiHPOTerms,
+          value: '3+',
+          sub: t.kpiHpoExample,
+          subColor: theme.amber,
+        }].map((kpi, i) => (
+          <div
+            key={i}
+            style={c.kpiCard(i)}
+            onMouseEnter={() => setHoveredKpi(i)}
+            onMouseLeave={() => setHoveredKpi(null)}
+          >
+            <div style={c.kpiGlow(i)} />
+            <div style={c.kpiShine} />
+            <span style={c.kpiIcon}>{kpi.icon}</span>
+            <div style={c.kpiLabel}>{kpi.label}</div>
+            <div style={{ ...c.kpiValue, fontSize: kpi.valueFontSize || 32 }}>{kpi.value}</div>
+            <div style={{ ...c.kpiSub, color: kpi.subColor }}>{kpi.sub}</div>
+          </div>
+        ))}
       </div>
 
       <div style={c.bottom}>
@@ -235,6 +353,7 @@ export default function App() {
     { id: 'hpo_cluster', label: t.navHpoCluster, icon: '✱', group: 'ANALYSIS' },
     { id: 'input', label: t.navLogSymptoms, icon: '△', group: 'MONITORING' },
     { id: 'signals', label: t.navHistory, icon: '▷', group: 'MONITORING' },
+    { id: 'health_report', label: 'Health Report', icon: '🏥', group: 'MONITORING' },
   ];
 
   const groups = ['CORE', 'ANALYSIS', 'MONITORING'];
@@ -242,6 +361,7 @@ export default function App() {
 
   return (
     <div style={s.app}>
+      <AmbientOrbs />
       {/* ── Sidebar ── */}
       <aside style={s.sidebar}>
         <div style={s.logoArea}>
@@ -285,7 +405,7 @@ export default function App() {
       </aside>
 
       {/* ── Main Content ── */}
-      <main style={s.main}>
+      <main style={{ ...s.main, perspective: '1200px', perspectiveOrigin: '50% 0%', position: 'relative', zIndex: 1 }}>
         <header style={s.topBar}>
           <div style={s.breadcrumb}>
             {t.breadcrumbDashboard}
@@ -351,6 +471,11 @@ export default function App() {
           )}
           {page === 'hpo_cluster' && (
             <HPOClusterView patient={selectedPatient} />
+          )}
+          {page === 'health_report' && (
+            selectedPatient
+              ? <HealthReport patient={selectedPatient} />
+              : <div style={s.noPatient}><p>{t.noPatientOption}</p></div>
           )}
         </div>
       </main>

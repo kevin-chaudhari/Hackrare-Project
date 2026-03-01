@@ -66,4 +66,8 @@ export const getHpoCluster = (diseaseId) =>
 export const getFlareAlert = (patientId) =>
   api.get(`/flare-alert/${patientId}`);
 
+// ── Patient Health Report (Tests + Gemini Summary) ────────────────────────────
+export const getHealthReport = (patientId, windowDays = 7) =>
+  api.get(`/health-report/${patientId}?window_days=${windowDays}`);
+
 export default api;

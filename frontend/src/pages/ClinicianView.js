@@ -180,12 +180,12 @@ export default function ClinicianView({ patient }) {
 
   const lifestyleItems = latestLifestyleContext
     ? Object.entries(latestLifestyleContext)
-        .map(([key, value]) => ({
-          key,
-          label: lifestyleFieldLabels[key],
-          value: formatLifestyleValue(key, value),
-        }))
-        .filter((item) => item.label && item.value)
+      .map(([key, value]) => ({
+        key,
+        label: lifestyleFieldLabels[key],
+        value: formatLifestyleValue(key, value),
+      }))
+      .filter((item) => item.label && item.value)
     : [];
 
   if (loading && !summary) return <div style={s.loading}>{t.generatingClinical}</div>;

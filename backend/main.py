@@ -1084,11 +1084,117 @@ def get_disease_config(disease_id: str):
     }
 
 
+# ─── Health Report ──────────────────────────────────────────────────────────────
+
+@app.get("/health-report/{patient_id}", tags=["Reports"])
+def get_health_report(patient_id: str, window_days: int = 7, db: Session = Depends(get_db)):
+    """
+    Generate a patient-friendly health report with:
+    - Disease-specific recommended tests (evidence-based, 22 diseases)
+    - Gemini AI summary of recent signal data (falls back gracefully)
+    - Functional impact and risk overview
+    """
+    from backend.summary_generator import generate_health_report
+
+    patient = _get_patient_or_404(patient_id, db)
+    config = DISEASE_CONFIGS.get(patient.disease, {})
+    disease_name = config.get("name", patient.disease)
+
+    # Gather latest signals
+    latest_signal = (
+        db.query(ComputedSignal)
+        .filter(ComputedSignal.patient_id == patient_id)
+        .order_by(ComputedSignal.computed_at.desc())
+        .first()
+    )
+    latest_fis = (
+        db.query(FunctionalScore)
+        .filter(FunctionalScore.patient_id == patient_id)
+        .order_by(FunctionalScore.computed_at.desc())
+        .first()
+    )
+    latest_entry = (
+        db.query(SymptomEntry)
+        .filter(SymptomEntry.patient_id == patient_id)
+        .order_by(SymptomEntry.timestamp.desc())
+        .first()
+    )
+
+    # Build signals dict
+    signals_dict: dict = {}
+    risk_data: dict = {}
+
+    if latest_signal:
+        z_scores_raw = latest_signal.z_scores or {}
+        # Expand flat z-score dict to detail objects for generate_health_report
+        signals_dict = {
+            "risk_category": latest_signal.risk_category or "INSUFFICIENT_DATA",
+            "z_scores": {
+                k: {"z_score": v, "interpretation": (
+                    "critical" if abs(v) >= 2.5 else
+                    "elevated" if abs(v) >= 1.5 else
+                    "watch" if abs(v) >= 1.0 else "stable"
+                )}
+                for k, v in z_scores_raw.items()
+            },
+            "volatility": {
+                "value": latest_signal.volatility_index or 0.0,
+                "label": (
+                    "high" if (latest_signal.volatility_index or 0) > 0.7 else
+                    "moderate" if (latest_signal.volatility_index or 0) > 0.35 else "low"
+                ),
+            },
+            "flare_acceleration": {
+                "slope_7d": latest_signal.flare_acceleration or 0.0,
+                "acceleration_label": "stable",
+            },
+            "trigger_correlations": [],
+            "functional_impact": {
+                "composite": (latest_fis.fis_composite if latest_fis else 0.0),
+                "mobility": (latest_fis.domain_scores.get("mobility", 0) if latest_fis else 0.0),
+                "sleep": (latest_fis.domain_scores.get("sleep", 0) if latest_fis else 0.0),
+                "cognitive": (latest_fis.domain_scores.get("cognitive", 0) if latest_fis else 0.0),
+                "severity_label": "minimal",
+            },
+            "missingness": {"completeness_pct": 100, "entries_found": 1, "entries_expected": window_days},
+            "red_flags": [],
+        }
+
+        if latest_entry and latest_signal:
+            risk_payload = _compute_disease_aware_risk(patient, latest_entry, latest_signal, latest_fis)
+            risk_data = {
+                "risk_probabilities": risk_payload.get("risk_probabilities", {}),
+                "forecast_3d": [],
+            }
+    else:
+        signals_dict = {
+            "risk_category": "INSUFFICIENT_DATA",
+            "z_scores": {},
+            "volatility": {"value": 0, "label": "low"},
+            "flare_acceleration": {"slope_7d": 0, "acceleration_label": "stable"},
+            "trigger_correlations": [],
+            "functional_impact": {"composite": 0, "mobility": 0, "sleep": 0, "cognitive": 0, "severity_label": "minimal"},
+            "missingness": {"completeness_pct": 0, "entries_found": 0, "entries_expected": window_days},
+            "red_flags": [],
+        }
+
+    report = generate_health_report(
+        patient_id=patient_id,
+        disease=patient.disease,
+        disease_name=disease_name,
+        signals=signals_dict,
+        risk_data=risk_data,
+        window_days=window_days,
+    )
+    return report
+
+
 # ─── Health ─────────────────────────────────────────────────────────────────────
 
 @app.get("/health", tags=["Health"])
 def health():
     return {"status": "ok", "version": "1.0.0", "timestamp": datetime.utcnow().isoformat()}
+
 
 
 # ─── Baseline ───────────────────────────────────────────────────────────────────
