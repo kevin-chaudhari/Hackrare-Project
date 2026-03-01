@@ -36,6 +36,7 @@ class SymptomEntryCreate(BaseModel):
     )
     triggers: List[str] = Field(default=[], description="Active triggers")
     lifestyle_context: Dict[str, Any] = Field(default_factory=dict, description="Structured context that may help explain symptom changes")
+    shared_experience: Dict[str, Any] = Field(default_factory=dict, description="Structured anonymized lived-experience inputs")
     notes: Optional[str] = None
 
 class SymptomEntryResponse(BaseModel):
@@ -45,6 +46,7 @@ class SymptomEntryResponse(BaseModel):
     symptoms: Dict[str, float]
     triggers: List[str]
     lifestyle_context: Dict[str, Any] = Field(default_factory=dict)
+    shared_experience: Dict[str, Any] = Field(default_factory=dict)
     notes: Optional[str]
 
     class Config:
@@ -212,6 +214,15 @@ class PatientHistoryResponse(BaseModel):
     history: List[SignalHistoryPoint]
     total_entries: int
     days_tracked: int
+
+
+class SharedExperienceSummaryResponse(BaseModel):
+    disease_id: str
+    disease_name: str
+    based_on_entries: int
+    helpful_counts: Dict[str, int]
+    harder_counts: Dict[str, int]
+    wisdom_snippets: List[str]
 
 
 # ─── Sensor Streams ───────────────────────────────────────────────────────────

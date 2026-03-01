@@ -55,6 +55,9 @@ export const listDiseases = () => api.get('/diseases');
 export const getDiseaseConfig = (diseaseId) =>
   api.get(`/diseases/${diseaseId}`);
 
+export const getSharedExperiencesSummary = (diseaseId) =>
+  api.get(`/diseases/${diseaseId}/shared-experiences-summary`);
+
 // ── Semantic HPO Matching ──────────────────────────────────────────────────────
 export const matchHPO = (symptomText, diseaseId = null, topK = 3) =>
   api.post('/match-hpo', { symptom_text: symptomText, disease_id: diseaseId, top_k: topK });

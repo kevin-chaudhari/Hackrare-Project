@@ -7,6 +7,7 @@ import ClinicianView from './pages/ClinicianView';
 import PatientSetup from './pages/PatientSetup';
 import HPOClusterView from './pages/HPOClusterView';
 import HealthReport from './pages/HealthReport';
+import SharedExperiences from './pages/SharedExperiences';
 import { listPatients, getFlareAlert } from './api';
 import theme from './theme';
 
@@ -24,10 +25,10 @@ const DISEASE_COLORS = {
   RRP: { bg: '#2d0a0a', fg: '#f87171' }, PRION: { bg: '#0c0a09', fg: '#a8a29e' },
 };
 
-const NAV_PAGE_IDS = ['dashboard', 'setup', 'input', 'signals', 'clinician', 'health_report'];
+const NAV_PAGE_IDS = ['dashboard', 'setup', 'input', 'signals', 'clinician', 'shared_experiences', 'health_report'];
 const GROUP_MAP = {
   dashboard: 'CORE', setup: 'CORE',
-  clinician: 'ANALYSIS',
+  clinician: 'ANALYSIS', shared_experiences: 'ANALYSIS',
   input: 'MONITORING', signals: 'MONITORING', health_report: 'MONITORING',
 };
 
@@ -343,17 +344,20 @@ export default function App() {
   const PAGE_LABEL_KEYS = {
     dashboard: t.navDashboard, setup: t.navPatientProfile,
     input: t.navLogSymptoms, signals: t.navHistory, clinician: t.navClinicianView,
-    hpo_cluster: t.navHpoCluster
+    hpo_cluster: t.navHpoCluster,
+    shared_experiences: t.navSharedExperiences,
+    health_report: t.navHealthReport
   };
 
   const NAV_ITEMS = [
     { id: 'dashboard', label: t.navDashboard, icon: '⬡', group: 'CORE' },
     { id: 'setup', label: t.navPatientProfile, icon: '◎', group: 'CORE' },
     { id: 'clinician', label: t.navClinicianView, icon: '◇', group: 'ANALYSIS' },
+    { id: 'shared_experiences', label: t.navSharedExperiences, icon: '◌', group: 'ANALYSIS' },
     { id: 'hpo_cluster', label: t.navHpoCluster, icon: '✱', group: 'ANALYSIS' },
     { id: 'input', label: t.navLogSymptoms, icon: '△', group: 'MONITORING' },
     { id: 'signals', label: t.navHistory, icon: '▷', group: 'MONITORING' },
-    { id: 'health_report', label: 'Health Report', icon: '🏥', group: 'MONITORING' },
+    { id: 'health_report', label: t.navHealthReport, icon: '🏥', group: 'MONITORING' },
   ];
 
   const groups = ['CORE', 'ANALYSIS', 'MONITORING'];
@@ -471,6 +475,11 @@ export default function App() {
           )}
           {page === 'hpo_cluster' && (
             <HPOClusterView patient={selectedPatient} />
+          )}
+          {page === 'shared_experiences' && (
+            selectedPatient
+              ? <SharedExperiences patient={selectedPatient} />
+              : <div style={s.noPatient}><p>{t.noPatientOption}</p></div>
           )}
           {page === 'health_report' && (
             selectedPatient

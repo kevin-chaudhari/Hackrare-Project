@@ -39,6 +39,7 @@ class SymptomEntry(Base):
     symptoms_json = Column(Text, nullable=False)   # JSON: {symptom: 0-10}
     triggers_json = Column(Text, nullable=False, default="[]")  # JSON: [trigger_name]
     lifestyle_json = Column(Text, nullable=False, default="{}")  # JSON: structured lifestyle context
+    shared_experience_json = Column(Text, nullable=False, default="{}")  # JSON: anonymized structured experience sharing
     notes = Column(Text, nullable=True)
 
     patient = relationship("Patient", back_populates="entries")
@@ -58,6 +59,10 @@ class SymptomEntry(Base):
     @property
     def lifestyle_context(self):
         return json.loads(self.lifestyle_json)
+
+    @property
+    def shared_experience(self):
+        return json.loads(self.shared_experience_json)
 
 
 class BaselineProfile(Base):
@@ -195,6 +200,8 @@ def init_db():
         }
         if "lifestyle_json" not in entry_columns:
             conn.exec_driver_sql("ALTER TABLE symptom_entries ADD COLUMN lifestyle_json TEXT DEFAULT '{}'")
+        if "shared_experience_json" not in entry_columns:
+            conn.exec_driver_sql("ALTER TABLE symptom_entries ADD COLUMN shared_experience_json TEXT DEFAULT '{}'")
 
 
 def get_db():

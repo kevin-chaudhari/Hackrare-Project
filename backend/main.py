@@ -22,7 +22,8 @@ from backend.schemas import (
     HPOMatchRequest, HPOMatchResponse, HPOMatchResult,
     FlareAlertResponse,
     PatientHistoryResponse, SignalHistoryPoint,
-    SensorStreamSummaryResponse
+    SensorStreamSummaryResponse,
+    SharedExperienceSummaryResponse
 )
 from backend.signal_engine import (
     compute_all_signals, update_ewma_baseline, initialize_baseline_from_history
@@ -87,6 +88,7 @@ def _entries_to_dicts(entries: List[SymptomEntry]) -> List[dict]:
         "symptoms": e.symptoms,
         "triggers": e.triggers,
         "lifestyle_context": e.lifestyle_context,
+        "shared_experience": e.shared_experience,
         "notes": e.notes
     } for e in entries]
 
@@ -319,6 +321,15 @@ def _compute_disease_aware_risk(patient: Patient, latest_entry: SymptomEntry, la
         "context_statement": context_statement,
         "composite_pressure": composite_pressure,
     }
+
+
+def _sanitize_shared_snippet(text: str) -> Optional[str]:
+    if not text:
+        return None
+    cleaned = " ".join(str(text).strip().split())
+    if len(cleaned) < 8:
+        return None
+    return cleaned[:160]
 
 
 def _sensor_modifiers_for_disease(disease: str) -> dict:
@@ -583,6 +594,7 @@ def add_symptom_entry(body: SymptomEntryCreate, db: Session = Depends(get_db)):
         symptoms_json=json.dumps(body.symptoms),
         triggers_json=json.dumps(body.triggers),
         lifestyle_json=json.dumps(body.lifestyle_context or {}),
+        shared_experience_json=json.dumps(body.shared_experience or {}),
         notes=body.notes
     )
     db.add(entry)
@@ -600,6 +612,7 @@ def add_symptom_entry(body: SymptomEntryCreate, db: Session = Depends(get_db)):
         symptoms=entry.symptoms,
         triggers=entry.triggers,
         lifestyle_context=entry.lifestyle_context,
+        shared_experience=entry.shared_experience,
         notes=entry.notes
     )
 
@@ -613,7 +626,7 @@ def get_entries(patient_id: str, limit: int = 100, db: Session = Depends(get_db)
                .limit(limit).all())
     return [SymptomEntryResponse(
         id=e.id, patient_id=e.patient_id, timestamp=e.timestamp,
-        symptoms=e.symptoms, triggers=e.triggers, lifestyle_context=e.lifestyle_context, notes=e.notes
+        symptoms=e.symptoms, triggers=e.triggers, lifestyle_context=e.lifestyle_context, shared_experience=e.shared_experience, notes=e.notes
     ) for e in entries]
 
 
@@ -1054,6 +1067,56 @@ def get_patient_history(patient_id: str, db: Session = Depends(get_db)):
         history=history,
         total_entries=total_entries,
         days_tracked=days_tracked
+    )
+
+
+@app.get("/diseases/{disease_id}/shared-experiences-summary", response_model=SharedExperienceSummaryResponse, tags=["Community"])
+def get_shared_experiences_summary(disease_id: str, db: Session = Depends(get_db)):
+    if disease_id not in DISEASE_CONFIGS:
+        raise HTTPException(404, f"Disease '{disease_id}' not found")
+
+    recent_cutoff = datetime.utcnow() - timedelta(days=90)
+    entries = (
+        db.query(SymptomEntry)
+        .join(Patient, SymptomEntry.patient_id == Patient.id)
+        .filter(Patient.disease == disease_id)
+        .filter(SymptomEntry.timestamp >= recent_cutoff)
+        .order_by(SymptomEntry.timestamp.desc())
+        .all()
+    )
+
+    helpful_counts = {}
+    harder_counts = {}
+    wisdom_snippets = []
+    based_on_entries = 0
+
+    for entry in entries:
+        shared = entry.shared_experience or {}
+        helped = shared.get("helpful_today") or []
+        harder = shared.get("made_harder_today") or []
+        snippet = _sanitize_shared_snippet(shared.get("wish_known_earlier"))
+
+        if not helped and not harder and not snippet:
+            continue
+
+        based_on_entries += 1
+        for item in helped:
+            helpful_counts[item] = helpful_counts.get(item, 0) + 1
+        for item in harder:
+            harder_counts[item] = harder_counts.get(item, 0) + 1
+        if snippet and snippet not in wisdom_snippets and len(wisdom_snippets) < 5:
+            wisdom_snippets.append(snippet)
+
+    helpful_counts = dict(sorted(helpful_counts.items(), key=lambda kv: kv[1], reverse=True)[:8])
+    harder_counts = dict(sorted(harder_counts.items(), key=lambda kv: kv[1], reverse=True)[:8])
+
+    return SharedExperienceSummaryResponse(
+        disease_id=disease_id,
+        disease_name=DISEASE_CONFIGS[disease_id]["name"],
+        based_on_entries=based_on_entries,
+        helpful_counts=helpful_counts,
+        harder_counts=harder_counts,
+        wisdom_snippets=wisdom_snippets,
     )
 
 
