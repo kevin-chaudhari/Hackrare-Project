@@ -1119,11 +1119,14 @@ def generate_summary(body: SummaryRequest, db: Session = Depends(get_db)):
 def generate_ai_explainer(body: DetailedReportRequest, db: Session = Depends(get_db)):
     # Authenticate via patient check
     _get_patient_or_404(body.patient_id, db)
-    report_text = generate_detailed_ai_report(
-        patient_id=body.patient_id,
-        disease_name=body.disease_name,
-        deviations=body.deviations
-    )
+    try:
+        report_text = generate_detailed_ai_report(
+            patient_id=body.patient_id,
+            disease_name=body.disease_name,
+            deviations=body.deviations
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return DetailedReportResponse(report_text=report_text)
 
 
@@ -1357,7 +1360,7 @@ def get_disease_config(disease_id: str):
 # ─── Health Report ──────────────────────────────────────────────────────────────
 
 @app.get("/health-report/{patient_id}", tags=["Reports"])
-def get_health_report(patient_id: str, window_days: int = 7, db: Session = Depends(get_db)):
+def get_health_report(patient_id: str, window_days: int = 7, lang: str = "en", db: Session = Depends(get_db)):
     """
     Generate a patient-friendly health report with:
     - Disease-specific recommended tests (evidence-based, 22 diseases)
@@ -1455,6 +1458,7 @@ def get_health_report(patient_id: str, window_days: int = 7, db: Session = Depen
         signals=signals_dict,
         risk_data=risk_data,
         window_days=window_days,
+        lang=lang,
     )
     return report
 

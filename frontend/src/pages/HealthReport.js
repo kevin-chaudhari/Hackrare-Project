@@ -1,5 +1,5 @@
 // HealthReport.js — Structured Patient Health Report with Disease Tests + Gemini Summary
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useLang } from '../i18n/LanguageContext';
 import { getHealthReport } from '../api';
 import theme from '../theme';
@@ -73,8 +73,14 @@ function SectionHeader({ icon, title, badge }) {
 
 // ─── Test item ───────────────────────────────────────────────────────────────
 function TestItem({ item }) {
+    const { t } = useLang();
     const [open, setOpen] = useState(false);
     const ps = PRIORITY_STYLE[item.priority] || PRIORITY_STYLE.ROUTINE;
+    const priorityLabel = ({
+        HIGH: t.healthReportPriorityHigh,
+        WATCH: t.healthReportPriorityWatch,
+        ROUTINE: t.healthReportPriorityRoutine,
+    })[item.priority] || item.priority;
     return (
         <div
             onClick={() => setOpen(o => !o)}
@@ -97,7 +103,7 @@ function TestItem({ item }) {
                     color: ps.color, background: `${ps.border}22`,
                     border: `1px solid ${ps.border}55`, borderRadius: 6, padding: '2px 7px',
                 }}>
-                    {item.priority}
+                    {priorityLabel}
                 </span>
                 <span style={{ color: '#64748b', fontSize: 13, marginLeft: 4 }}>{open ? '▲' : '▼'}</span>
             </div>
@@ -112,18 +118,19 @@ function TestItem({ item }) {
 
 // ─── Tests panel ─────────────────────────────────────────────────────────────
 function TestsPanel({ tests }) {
+    const { t } = useLang();
     const categories = [
-        { key: 'labs', icon: '🧪', label: 'Lab Tests' },
-        { key: 'imaging', icon: '🫁', label: 'Imaging' },
-        { key: 'specialist', icon: '👨‍⚕️', label: 'Specialist Referrals' },
-        { key: 'monitoring', icon: '📈', label: 'Monitoring Tools' },
+        { key: 'labs', icon: '🧪', label: t.healthReportLabs },
+        { key: 'imaging', icon: '🫁', label: t.healthReportImaging },
+        { key: 'specialist', icon: '👨‍⚕️', label: t.healthReportSpecialist },
+        { key: 'monitoring', icon: '📈', label: t.healthReportMonitoring },
     ];
 
     const total = categories.reduce((s, c) => s + (tests[c.key]?.length || 0), 0);
 
     return (
         <HoverCard style={{ padding: 24, marginBottom: 24 }}>
-            <SectionHeader icon="🔬" title="Recommended Tests & Investigations" badge={`${total} items`} />
+            <SectionHeader icon="🔬" title={t.healthReportRecommendedTests} badge={t.healthReportItems(total)} />
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: 20 }}>
                 {categories.map(cat => {
                     const items = tests[cat.key];
@@ -149,10 +156,10 @@ function TestsPanel({ tests }) {
                 background: 'rgba(100,116,139,0.1)', borderRadius: 10,
                 color: '#64748b', fontSize: 12, lineHeight: 1.6,
             }}>
-                <b style={{ color: '#94a3b8' }}>Legend:</b>{' '}
-                <span style={{ color: '#fca5a5' }}>● HIGH</span> — Priority for your condition &nbsp;
-                <span style={{ color: '#fcd34d' }}>● WATCH</span> — Recommended if symptoms change &nbsp;
-                <span style={{ color: '#5eead4' }}>● ROUTINE</span> — Standard periodic monitoring
+                <b style={{ color: '#94a3b8' }}>{t.healthReportLegend}:</b>{' '}
+                <span style={{ color: '#fca5a5' }}>● HIGH</span> — {t.healthReportLegendHigh} &nbsp;
+                <span style={{ color: '#fcd34d' }}>● WATCH</span> — {t.healthReportLegendWatch} &nbsp;
+                <span style={{ color: '#5eead4' }}>● ROUTINE</span> — {t.healthReportLegendRoutine}
             </div>
         </HoverCard>
     );
@@ -180,6 +187,7 @@ function ImpactBar({ label, value, colour }) {
 
 // ─── Risk Badge ───────────────────────────────────────────────────────────────
 function RiskBadge({ risk }) {
+    const { t } = useLang();
     const rc = RISK_COLOUR[risk] || RISK_COLOUR.INSUFFICIENT_DATA;
     return (
         <span style={{
@@ -187,23 +195,27 @@ function RiskBadge({ risk }) {
             color: rc.text, borderRadius: 8, padding: '4px 14px',
             fontSize: 13, fontWeight: 700, letterSpacing: '0.1em',
         }}>
-            {risk}
+            {t.riskDisplayLabels?.[risk] || risk}
         </span>
     );
 }
 
 // ─── AI Summary Panel ────────────────────────────────────────────────────────
 function SummaryPanel({ report }) {
+    const { t } = useLang();
     const paragraphs = (report.patient_summary || '').split('\n\n').filter(Boolean);
-    const note = paragraphs[paragraphs.length - 1]?.startsWith('Note:')
+    const note = paragraphs[paragraphs.length - 1] && (
+        paragraphs[paragraphs.length - 1].startsWith('Note:') ||
+        paragraphs[paragraphs.length - 1].startsWith('Nota:')
+    )
         ? paragraphs.pop() : null;
 
     return (
         <HoverCard style={{ padding: 24, marginBottom: 24 }}>
             <SectionHeader
                 icon={report.is_ai_generated ? '🤖' : '📋'}
-                title={report.is_ai_generated ? 'AI Health Summary (Gemini)' : 'Health Summary'}
-                badge={report.is_ai_generated ? 'Gemini AI' : 'Structured'}
+                title={report.is_ai_generated ? t.healthReportSummaryAi : t.healthReportSummaryStructured}
+                badge={report.is_ai_generated ? t.healthReportGeminiBadge : t.healthReportStructuredBadge}
             />
             <div style={{ color: '#cbd5e1', fontSize: 14.5, lineHeight: 1.8 }}>
                 {paragraphs.map((p, i) => (
@@ -226,6 +238,7 @@ function SummaryPanel({ report }) {
 
 // ─── Overview panel ──────────────────────────────────────────────────────────
 function OverviewPanel({ report }) {
+    const { t } = useLang();
     const fi = report.functional_impact || {};
     const rc = RISK_COLOUR[report.risk_category] || RISK_COLOUR.INSUFFICIENT_DATA;
 
@@ -233,15 +246,15 @@ function OverviewPanel({ report }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
             {/* Risk + Deviations */}
             <HoverCard style={{ padding: 22 }}>
-                <SectionHeader icon="📊" title="Signal Overview" />
+                <SectionHeader icon="📊" title={t.healthReportSignalOverview} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
-                    <span style={{ color: '#94a3b8', fontSize: 14 }}>Risk Category</span>
+                    <span style={{ color: '#94a3b8', fontSize: 14 }}>{t.healthReportRiskCategory}</span>
                     <RiskBadge risk={report.risk_category} />
                 </div>
                 {report.top_deviations && report.top_deviations.length > 0 ? (
                     <div>
                         <div style={{ color: '#64748b', fontSize: 12, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            Top Signal Deviations
+                            {t.healthReportTopDeviations}
                         </div>
                         {report.top_deviations.map((d, i) => (
                             <div key={i} style={{
@@ -257,7 +270,7 @@ function OverviewPanel({ report }) {
                     </div>
                 ) : (
                     <div style={{ color: '#64748b', fontSize: 13 }}>
-                        No significant signal deviations in this period.
+                        {t.healthReportNoDeviations}
                     </div>
                 )}
                 {report.forecast_trend && (
@@ -267,20 +280,20 @@ function OverviewPanel({ report }) {
                         border: '1px solid rgba(99,102,241,0.2)',
                         borderRadius: 8, color: '#a5b4fc', fontSize: 13,
                     }}>
-                        📅 Forecast: {report.forecast_trend.charAt(0).toUpperCase() + report.forecast_trend.slice(1)}
+                        📅 {t.healthReportForecast}: {report.forecast_trend.charAt(0).toUpperCase() + report.forecast_trend.slice(1)}
                     </div>
                 )}
             </HoverCard>
 
             {/* Functional Impact */}
             <HoverCard style={{ padding: 22 }}>
-                <SectionHeader icon="🏃" title="Functional Impact" badge={`${fi.composite_pct || 0}% overall`} />
-                <ImpactBar label="Mobility" value={fi.mobility_pct || 0} colour="#ef4444" />
-                <ImpactBar label="Sleep" value={fi.sleep_pct || 0} colour="#6366f1" />
-                <ImpactBar label="Cognitive" value={fi.cognitive_pct || 0} colour="#f59e0b" />
+                <SectionHeader icon="🏃" title={t.healthReportFunctionalImpact} badge={t.healthReportOverall(fi.composite_pct || 0)} />
+                <ImpactBar label={t.signalDomains?.mobility || 'Mobility'} value={fi.mobility_pct || 0} colour="#ef4444" />
+                <ImpactBar label={t.signalDomains?.sleep || 'Sleep'} value={fi.sleep_pct || 0} colour="#6366f1" />
+                <ImpactBar label={t.signalDomains?.cognitive || 'Cognitive'} value={fi.cognitive_pct || 0} colour="#f59e0b" />
                 <div style={{ marginTop: 16 }}>
                     <div style={{ color: '#64748b', fontSize: 12, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                        Composite Score
+                        {t.healthReportComposite}
                     </div>
                     <div style={{
                         background: 'rgba(255,255,255,0.04)', borderRadius: 12, height: 14, overflow: 'hidden',
@@ -293,12 +306,12 @@ function OverviewPanel({ report }) {
                         }} />
                     </div>
                     <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 5, textAlign: 'right' }}>
-                        {fi.composite_pct || 0}% impact on daily function
+                        {t.healthReportDailyImpact(fi.composite_pct || 0)}
                     </div>
                 </div>
                 {report.red_flags && report.red_flags.length > 0 && (
                     <div style={{ marginTop: 16 }}>
-                        <div style={{ color: '#fca5a5', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>⚠ Red Flags</div>
+                        <div style={{ color: '#fca5a5', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>⚠ {t.healthReportRedFlags}</div>
                         {report.red_flags.map((rf, i) => (
                             <div key={i} style={{
                                 padding: '5px 10px', marginBottom: 4,
@@ -318,6 +331,7 @@ function OverviewPanel({ report }) {
 
 // ─── Print Button ─────────────────────────────────────────────────────────────
 function PrintButton() {
+    const { t } = useLang();
     return (
         <button
             onClick={() => window.print()}
@@ -332,7 +346,7 @@ function PrintButton() {
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(20,184,166,0.25)'}
             onMouseLeave={e => e.currentTarget.style.background = 'rgba(20,184,166,0.15)'}
         >
-            🖨 Print / Export
+            🖨 {t.healthReportPrint}
         </button>
     );
 }
@@ -355,25 +369,58 @@ function Skeleton() {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function HealthReport({ patient }) {
-    const { t } = useLang();
+    const { t, lang } = useLang();
     const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [windowDays, setWindowDays] = useState(7);
+    const inFlightKeyRef = useRef(null);
+    const loadedKeyRef = useRef(null);
+    const latestRequestRef = useRef(0);
 
-    const fetchReport = useCallback(async () => {
+    const fetchReport = useCallback(async (force = false) => {
         if (!patient?.id) return;
+        const fetchKey = `${patient.id}:${windowDays}:${lang}`;
+        if (!force) {
+            if (inFlightKeyRef.current === fetchKey) return;
+            if (loadedKeyRef.current === fetchKey) return;
+        }
+
+        const requestId = latestRequestRef.current + 1;
+        latestRequestRef.current = requestId;
+        inFlightKeyRef.current = fetchKey;
         setLoading(true);
         setError(null);
         try {
-            const res = await getHealthReport(patient.id, windowDays);
-            setReport(res.data);
+            const res = await getHealthReport(patient.id, windowDays, lang);
+            if (latestRequestRef.current !== requestId) return;
+            setReport((prev) => {
+                const next = res.data;
+                if (
+                    prev &&
+                    prev.is_ai_generated &&
+                    !next.is_ai_generated &&
+                    prev.patient_id === next.patient_id &&
+                    prev.period_days === next.period_days
+                ) {
+                    return prev;
+                }
+                return next;
+            });
+            loadedKeyRef.current = fetchKey;
         } catch (e) {
-            setError(e.response?.data?.detail || 'Failed to load health report. Ensure signals have been computed first.');
+            if (latestRequestRef.current === requestId) {
+                setError(e.response?.data?.detail || t.healthReportLoadError);
+            }
         } finally {
-            setLoading(false);
+            if (inFlightKeyRef.current === fetchKey) {
+                inFlightKeyRef.current = null;
+            }
+            if (latestRequestRef.current === requestId) {
+                setLoading(false);
+            }
         }
-    }, [patient?.id, windowDays]);
+    }, [patient?.id, windowDays, lang, t.healthReportLoadError]);
 
     useEffect(() => { fetchReport(); }, [fetchReport]);
 
@@ -392,12 +439,12 @@ export default function HealthReport({ patient }) {
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 28 }}>
                 <div>
                     <h1 style={{ fontSize: 26, fontWeight: 800, color: '#f1f5f9', marginBottom: 4 }}>
-                        🏥 Health Report
+                        🏥 {t.healthReportTitle}
                     </h1>
                     <div style={{ color: '#64748b', fontSize: 14 }}>
                         {patient?.disease
-                            ? <>Patient: <b style={{ color: T.teal }}>{patient.id}</b> · Disease: <b style={{ color: '#fcd34d' }}>{patient.disease}</b></>
-                            : 'Select a patient to view their health report'}
+                            ? <>{t.healthReportPatientLabel}: <b style={{ color: T.teal }}>{patient.id}</b> · {t.healthReportDiseaseLabel}: <b style={{ color: '#fcd34d' }}>{patient.disease}</b></>
+                            : t.healthReportSelectPatient}
                     </div>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -410,12 +457,12 @@ export default function HealthReport({ patient }) {
                             borderRadius: 8, color: '#e2e8f0', padding: '7px 12px', fontSize: 13, cursor: 'pointer',
                         }}
                     >
-                        <option value={7}>Last 7 days</option>
-                        <option value={14}>Last 14 days</option>
-                        <option value={30}>Last 30 days</option>
+                        <option value={7}>{t.healthReportWindowDays(7)}</option>
+                        <option value={14}>{t.healthReportWindowDays(14)}</option>
+                        <option value={30}>{t.healthReportWindowDays(30)}</option>
                     </select>
                     <button
-                        onClick={fetchReport}
+                        onClick={() => fetchReport(true)}
                         disabled={loading}
                         style={{
                             background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(20,184,166,0.3)',
@@ -424,38 +471,45 @@ export default function HealthReport({ patient }) {
                             transition: 'all 0.2s',
                         }}
                     >
-                        {loading ? '⏳ Generating…' : '↺ Refresh'}
+                        {loading ? `⏳ ${t.healthReportGenerating}` : `↺ ${t.healthReportRefresh}`}
                     </button>
                     <PrintButton />
                 </div>
             </div>
 
             {/* States */}
-            {loading && <Skeleton />}
+            {loading && !report && <Skeleton />}
 
-            {error && (
+            {error && !report && (
                 <HoverCard style={{ padding: 24, borderColor: 'rgba(239,68,68,0.4)' }}>
-                    <div style={{ color: '#fca5a5', fontSize: 15, fontWeight: 600, marginBottom: 8 }}>⚠ Unable to load report</div>
+                    <div style={{ color: '#fca5a5', fontSize: 15, fontWeight: 600, marginBottom: 8 }}>⚠ {t.healthReportUnable}</div>
                     <div style={{ color: '#94a3b8', fontSize: 14 }}>{error}</div>
                     <div style={{ marginTop: 12, color: '#64748b', fontSize: 13 }}>
-                        Tip: Click <b>Compute Signals</b> on the Dashboard first, then refresh this report.
+                        {t.healthReportTipPrefix} {t.healthReportTip}
                     </div>
                 </HoverCard>
             )}
 
-            {!loading && !error && report && (
+            {error && report && (
+                <HoverCard style={{ padding: '12px 16px', marginBottom: 16, borderColor: 'rgba(239,68,68,0.35)' }}>
+                    <div style={{ color: '#fca5a5', fontSize: 13, fontWeight: 600, marginBottom: 4 }}>⚠ {t.healthReportUnable}</div>
+                    <div style={{ color: '#94a3b8', fontSize: 13 }}>{error}</div>
+                </HoverCard>
+            )}
+
+            {report && (
                 <div id="printable-report">
                     {/* Meta banner */}
                     <HoverCard style={{ padding: '14px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
                         <div style={{ color: '#64748b', fontSize: 13 }}>
-                            Disease: <b style={{ color: '#fcd34d' }}>{report.disease_name}</b>
+                            {t.healthReportDiseaseLabel}: <b style={{ color: '#fcd34d' }}>{report.disease_name}</b>
                         </div>
                         <div style={{ color: '#64748b', fontSize: 13 }}>
-                            Period: <b style={{ color: '#94a3b8' }}>Last {report.period_days} days</b>
+                            {t.healthReportMetaPeriod}: <b style={{ color: '#94a3b8' }}>{t.healthReportWindowDays(report.period_days)}</b>
                         </div>
                         <div style={{ color: '#64748b', fontSize: 13 }}>
-                            Generated: <b style={{ color: '#94a3b8' }}>
-                                {report.generated_at ? new Date(report.generated_at).toLocaleString() : '—'}
+                            {t.healthReportMetaGenerated}: <b style={{ color: '#94a3b8' }}>
+                                {report.generated_at ? new Date(report.generated_at).toLocaleString(lang === 'es' ? 'es-ES' : 'en-US') : '—'}
                             </b>
                         </div>
                         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -465,7 +519,7 @@ export default function HealthReport({ patient }) {
                                     background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
                                     borderRadius: 8, padding: '2px 10px', fontSize: 11, color: '#a5b4fc',
                                 }}>
-                                    ✦ Gemini AI
+                                    ✦ {t.healthReportGeminiBadge}
                                 </span>
                             )}
                         </div>
@@ -489,7 +543,7 @@ export default function HealthReport({ patient }) {
                         border: '1px solid rgba(100,116,139,0.15)',
                         borderRadius: 12, color: '#475569', fontSize: 12, lineHeight: 1.7,
                     }}>
-                        🛡 <b style={{ color: '#64748b' }}>Disclaimer:</b> {report.disclaimer}
+                        🛡 <b style={{ color: '#64748b' }}>{t.healthReportDisclaimerLabel}:</b> {report.disclaimer}
                     </div>
                 </div>
             )}
@@ -497,9 +551,9 @@ export default function HealthReport({ patient }) {
             {!loading && !error && !report && patient?.id && (
                 <HoverCard style={{ padding: 40, textAlign: 'center' }}>
                     <div style={{ fontSize: 48, marginBottom: 16 }}>🏥</div>
-                    <div style={{ color: '#94a3b8', fontSize: 16 }}>No report data available yet.</div>
+                    <div style={{ color: '#94a3b8', fontSize: 16 }}>{t.healthReportNoData}</div>
                     <div style={{ color: '#64748b', fontSize: 14, marginTop: 8 }}>
-                        Go to the Dashboard and click <b style={{ color: T.teal }}>Compute Signals</b> first.
+                        {t.healthReportNoDataHelp}
                     </div>
                 </HoverCard>
             )}

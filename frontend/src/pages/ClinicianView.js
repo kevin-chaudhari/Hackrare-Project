@@ -148,7 +148,7 @@ export default function ClinicianView({ patient }) {
       const res = await generateAiExplainer(patient.id, summary.disease_name, summary.primary_deviations);
       setAiReport(res.data.report_text);
     } catch (e) {
-      setAiReport(t.aiExplainerError);
+      setAiReport(e.response?.data?.detail || t.aiExplainerError);
     } finally { setLoadingAi(false); }
   };
 
@@ -566,4 +566,3 @@ export default function ClinicianView({ patient }) {
     </div>
   );
 }
-

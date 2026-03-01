@@ -2,37 +2,38 @@
 import React, { useState } from 'react';
 import DoctorInput from './DoctorInput';
 import GestureInput from './GestureInput';
+import { useLang } from '../i18n/LanguageContext';
 import theme from '../theme';
 
-const ROLES = [
-    {
-        id: 'patient',
-        icon: '🧑',
-        title: 'Patient Mode',
-        subtitle: 'Gesture-based — tap, swipe, or dwell to log. No typing needed.',
-        gradient: 'linear-gradient(135deg, rgba(95,179,162,0.2), rgba(99,102,241,0.12))',
-        border: 'rgba(95,179,162,0.45)',
-        glow: 'rgba(95,179,162,0.15)',
-    },
-    {
-        id: 'doctor',
-        icon: '👨‍⚕️',
-        title: 'Doctor / Clinician',
-        subtitle: 'Manual sliders, PDF clinical notes (NLP extract), or CSV upload.',
-        gradient: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.12))',
-        border: 'rgba(99,102,241,0.45)',
-        glow: 'rgba(99,102,241,0.15)',
-    },
-];
-
 export default function LogSymptoms({ patient }) {
+    const { t } = useLang();
     const [role, setRole] = useState(null);
+    const roles = [
+        {
+            id: 'patient',
+            icon: '🧑',
+            title: t.logSymptomsPatientMode,
+            subtitle: t.logSymptomsPatientSub,
+            gradient: 'linear-gradient(135deg, rgba(95,179,162,0.2), rgba(99,102,241,0.12))',
+            border: 'rgba(95,179,162,0.45)',
+            glow: 'rgba(95,179,162,0.15)',
+        },
+        {
+            id: 'doctor',
+            icon: '👨‍⚕️',
+            title: t.logSymptomsDoctorMode,
+            subtitle: t.logSymptomsDoctorSub,
+            gradient: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.12))',
+            border: 'rgba(99,102,241,0.45)',
+            glow: 'rgba(99,102,241,0.15)',
+        },
+    ];
 
     if (!patient?.id) {
         return (
             <div style={{ padding: 60, textAlign: 'center', color: theme.textMuted, fontFamily: "'Inter', sans-serif" }}>
                 <div style={{ fontSize: 40, marginBottom: 14 }}>👥</div>
-                <div style={{ fontSize: 16 }}>Select a patient first using the selector above.</div>
+                <div style={{ fontSize: 16 }}>{t.logSymptomsSelectPatientFirst}</div>
             </div>
         );
     }
@@ -42,15 +43,15 @@ export default function LogSymptoms({ patient }) {
         <div style={{ fontFamily: "'Inter', sans-serif", color: theme.text, maxWidth: 640, margin: '0 auto', padding: '32px 0' }}>
             <div style={{ textAlign: 'center', marginBottom: 36 }}>
                 <h1 style={{ fontSize: 26, fontWeight: 900, color: theme.text, marginBottom: 6 }}>
-                    📝 Log Symptoms
+                    {t.navLogSymptoms}
                 </h1>
                 <div style={{ color: theme.textMuted, fontSize: 15 }}>
-                    Who is entering today's data?
+                    {t.logSymptomsWhoEntering}
                 </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                {ROLES.map(r => (
+                {roles.map(r => (
                     <button
                         key={r.id}
                         onClick={() => setRole(r.id)}
@@ -81,7 +82,7 @@ export default function LogSymptoms({ patient }) {
                             fontSize: 13, fontWeight: 700,
                             color: r.id === 'patient' ? theme.teal : '#a5b4fc',
                         }}>
-                            Select →
+                            {t.logSymptomsSelectAction}
                         </div>
                     </button>
                 ))}
@@ -99,7 +100,7 @@ export default function LogSymptoms({ patient }) {
             }}>
                 <span style={{ fontSize: 24 }}>🏥</span>
                 <div>
-                    Logging for: <b style={{ color: theme.teal }}>{patient.id}</b>
+                    {t.logSymptomsLoggingFor} <b style={{ color: theme.teal }}>{patient.id}</b>
                     {' · '}
                     <b style={{ color: '#fcd34d' }}>{patient.disease}</b>
                 </div>
@@ -120,8 +121,8 @@ export default function LogSymptoms({ patient }) {
                 borderRadius: 12,
             }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 20 }}>{ROLES.find(r => r.id === role)?.icon}</span>
-                    <b style={{ color: theme.text, fontSize: 14 }}>{ROLES.find(r => r.id === role)?.title}</b>
+                    <span style={{ fontSize: 20 }}>{roles.find(r => r.id === role)?.icon}</span>
+                    <b style={{ color: theme.text, fontSize: 14 }}>{roles.find(r => r.id === role)?.title}</b>
                     <span style={{
                         fontSize: 11, padding: '2px 8px', borderRadius: 8,
                         background: 'rgba(95,179,162,0.15)', color: theme.teal,
@@ -138,7 +139,7 @@ export default function LogSymptoms({ patient }) {
                     onMouseEnter={e => e.currentTarget.style.color = theme.text}
                     onMouseLeave={e => e.currentTarget.style.color = theme.textMuted}
                 >
-                    ⇄ Switch Role
+                    {t.logSymptomsSwitchRole}
                 </button>
             </div>
 

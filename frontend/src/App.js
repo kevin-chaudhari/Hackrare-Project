@@ -101,6 +101,96 @@ function AmbientOrbs() {
   );
 }
 
+function NavGlyph({ kind, active }) {
+  const stroke = active ? theme.text : theme.textMuted;
+  const accent = active ? theme.teal : theme.borderSoft;
+  const common = { fill: 'none', stroke, strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' };
+
+  const icons = {
+    dashboard: (
+      <>
+        <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" {...common} />
+        <rect x="13.5" y="3.5" width="7" height="5" rx="1.5" {...common} />
+        <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" {...common} />
+        <rect x="13.5" y="11.5" width="7" height="9" rx="1.5" {...common} />
+      </>
+    ),
+    setup: (
+      <>
+        <circle cx="12" cy="8" r="3.5" {...common} />
+        <path d="M5.5 19c1.7-3.3 4.1-4.8 6.5-4.8s4.8 1.5 6.5 4.8" {...common} />
+      </>
+    ),
+    clinician: (
+      <>
+        <path d="M7 5.5h10a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z" {...common} />
+        <path d="M9 10h6" {...common} />
+        <path d="M12 7v6" {...common} />
+        <path d="M9 16h6" {...common} />
+      </>
+    ),
+    shared_experiences: (
+      <>
+        <circle cx="8" cy="10" r="2.5" {...common} />
+        <circle cx="16" cy="10" r="2.5" {...common} />
+        <path d="M4.8 18c.9-2 2.2-3 3.2-3 .9 0 2.2 1 3.1 3" {...common} />
+        <path d="M12.9 18c.9-2 2.2-3 3.1-3 1 0 2.3 1 3.2 3" {...common} />
+      </>
+    ),
+    hpo_cluster: (
+      <>
+        <circle cx="6.5" cy="7" r="1.7" fill={stroke} />
+        <circle cx="17.5" cy="7" r="1.7" fill={stroke} />
+        <circle cx="12" cy="17" r="1.7" fill={stroke} />
+        <path d="M8 8.2 10.8 15.5M16 8.2l-2.8 7.3M8.2 7h7.6" {...common} />
+      </>
+    ),
+    log_symptoms: (
+      <>
+        <path d="M8 4.5h8" {...common} />
+        <path d="M9 3v3M15 3v3" {...common} />
+        <rect x="5" y="6.5" width="14" height="13" rx="2" {...common} />
+        <path d="M8.5 11h7M8.5 15h5" {...common} />
+      </>
+    ),
+    gesture_input: (
+      <>
+        <path d="M8.5 12V7.8a1.4 1.4 0 0 1 2.8 0V11" {...common} />
+        <path d="M11.3 11V6.8a1.4 1.4 0 0 1 2.8 0V11" {...common} />
+        <path d="M14.1 11V8.3a1.4 1.4 0 0 1 2.8 0v5.2a4.8 4.8 0 0 1-4.8 4.8H10a4 4 0 0 1-4-4v-2.1a1.4 1.4 0 0 1 2.5-.9Z" {...common} />
+      </>
+    ),
+    signals: (
+      <>
+        <path d="M4.5 16.5h3l2-6 3 9 2.6-6H19.5" {...common} />
+      </>
+    ),
+    health_report: (
+      <>
+        <path d="M12 20c-4.5-2.6-7-5.5-7-9.3a4 4 0 0 1 7-2.5 4 4 0 0 1 7 2.5c0 3.8-2.5 6.7-7 9.3Z" {...common} />
+      </>
+    ),
+  };
+
+  return (
+    <span style={{
+      width: 28,
+      height: 28,
+      borderRadius: 9,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: active ? theme.tealBg : 'rgba(143,163,184,0.06)',
+      border: `1px solid ${active ? theme.borderGlow : accent}`,
+      flexShrink: 0,
+    }}>
+      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+        {icons[kind] || icons.dashboard}
+      </svg>
+    </span>
+  );
+}
+
 const s = {
   app: { display: 'flex', minHeight: '100vh', background: theme.bg, color: theme.text, fontFamily: "'Inter', system-ui, -apple-system, sans-serif", position: 'relative' },
   sidebar: { width: 220, minHeight: '100vh', background: theme.panelGradient, borderRight: `1px solid ${theme.border}`, display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 100, boxShadow: theme.shadowSoft },
@@ -109,8 +199,7 @@ const s = {
   logoSub: { fontSize: 10, color: theme.teal, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 2 },
   navSection: { padding: '16px 0 0', flex: 1 },
   navGroupLabel: { fontSize: 10, color: theme.textMuted, fontWeight: 700, letterSpacing: 1.5, padding: '4px 20px 8px', textTransform: 'uppercase' },
-  navItem: (active) => ({ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 20px', cursor: 'pointer', fontSize: 14, color: active ? theme.text : theme.textMuted, fontWeight: active ? 600 : 400, background: active ? theme.tealBg : 'transparent', borderLeft: active ? `3px solid ${theme.teal}` : '3px solid transparent', transition: 'all 0.15s', borderRadius: '0 8px 8px 0', marginRight: 8 }),
-  navIcon: { fontSize: 16, opacity: 0.8 },
+  navItem: (active) => ({ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 16px 9px 20px', cursor: 'pointer', fontSize: 14, color: active ? theme.text : theme.textMuted, fontWeight: active ? 600 : 400, background: active ? theme.tealBg : 'transparent', borderLeft: active ? `3px solid ${theme.teal}` : '3px solid transparent', transition: 'all 0.15s', borderRadius: '0 10px 10px 0', marginRight: 8 }),
   patientArea: { padding: '16px 12px', borderTop: `1px solid ${theme.border}` },
   patientCard: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: theme.surfaceGradient, borderRadius: 10, cursor: 'pointer', boxShadow: theme.shadowSoft },
   patientAvatar: (d) => ({ width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, background: DISEASE_COLORS[d]?.bg || '#1f6feb', color: DISEASE_COLORS[d]?.fg || '#fff' }),
@@ -350,20 +439,20 @@ export default function App() {
     hpo_cluster: t.navHpoCluster,
     shared_experiences: t.navSharedExperiences,
     health_report: t.navHealthReport,
-    log_symptoms: '📝 Log Symptoms',
-    gesture_input: '🖐 Easy Input',
+    log_symptoms: t.navLogSymptoms,
+    gesture_input: t.navEasyInput,
   };
 
   const NAV_ITEMS = [
-    { id: 'dashboard', label: t.navDashboard, icon: '⬡', group: 'CORE' },
-    { id: 'setup', label: t.navPatientProfile, icon: '◎', group: 'CORE' },
-    { id: 'clinician', label: t.navClinicianView, icon: '◇', group: 'ANALYSIS' },
-    { id: 'shared_experiences', label: t.navSharedExperiences, icon: '◌', group: 'ANALYSIS' },
-    { id: 'hpo_cluster', label: t.navHpoCluster, icon: '✱', group: 'ANALYSIS' },
-    { id: 'log_symptoms', label: '📝 Log Symptoms', icon: '📝', group: 'MONITORING' },
-    { id: 'gesture_input', label: '🖐 Easy Input', icon: '🖐', group: 'MONITORING' },
-    { id: 'signals', label: t.navHistory, icon: '▷', group: 'MONITORING' },
-    { id: 'health_report', label: 'Health Report', icon: '🏥', group: 'MONITORING' },
+    { id: 'dashboard', label: t.navDashboard, icon: 'dashboard', group: 'CORE' },
+    { id: 'setup', label: t.navPatientProfile, icon: 'setup', group: 'CORE' },
+    { id: 'clinician', label: t.navClinicianView, icon: 'clinician', group: 'ANALYSIS' },
+    { id: 'shared_experiences', label: t.navSharedExperiences, icon: 'shared_experiences', group: 'ANALYSIS' },
+    { id: 'hpo_cluster', label: t.navHpoCluster, icon: 'hpo_cluster', group: 'ANALYSIS' },
+    { id: 'log_symptoms', label: t.navLogSymptoms, icon: 'log_symptoms', group: 'MONITORING' },
+    { id: 'gesture_input', label: t.navEasyInput, icon: 'gesture_input', group: 'MONITORING' },
+    { id: 'signals', label: t.navHistory, icon: 'signals', group: 'MONITORING' },
+    { id: 'health_report', label: t.navHealthReport, icon: 'health_report', group: 'MONITORING' },
   ];
 
   const groups = ['CORE', 'ANALYSIS', 'MONITORING'];
@@ -380,11 +469,11 @@ export default function App() {
         </div>
         <nav style={s.navSection}>
           {grouped.map(({ group, label, items }) => (
-            <div key={group}>
+              <div key={group}>
               <div style={s.navGroupLabel}>{label}</div>
               {items.map(item => (
                 <div key={item.id} style={s.navItem(page === item.id)} onClick={() => setPage(item.id)}>
-                  <span style={s.navIcon}>{item.icon}</span>
+                  <NavGlyph kind={item.icon} active={page === item.id} />
                   {item.label}
                 </div>
               ))}

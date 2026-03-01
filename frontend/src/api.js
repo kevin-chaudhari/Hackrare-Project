@@ -70,8 +70,8 @@ export const getFlareAlert = (patientId) =>
   api.get(`/flare-alert/${patientId}`);
 
 // ── Patient Health Report (Tests + Gemini Summary) ────────────────────────────
-export const getHealthReport = (patientId, windowDays = 7) =>
-  api.get(`/health-report/${patientId}?window_days=${windowDays}`);
+export const getHealthReport = (patientId, windowDays = 7, lang = 'en') =>
+  api.get(`/health-report/${patientId}?window_days=${windowDays}&lang=${lang}`);
 
 // ── CSV / Excel Bulk Upload ────────────────────────────────────────────────────
 export const uploadSymptomCSV = (patientId, formData) =>

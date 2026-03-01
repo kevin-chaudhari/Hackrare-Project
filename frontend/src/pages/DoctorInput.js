@@ -114,6 +114,7 @@ function DocChoiceRow({ label, fieldKey, choices, ctx, setCtx }) {
 }
 
 function DayContextPanel({ ctx, setCtx }) {
+    const { t } = useLang();
     const [showExtra, setShowExtra] = useState(false);
     const secHead = (txt) => (
         <div style={{
@@ -128,64 +129,64 @@ function DayContextPanel({ ctx, setCtx }) {
     return (
         <GlassCard style={{ padding: 22, marginTop: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 }}>
-                🌙 Things That May Have Affected Today
+                🌙 {t.contextTitle}
             </div>
             <div style={{ color: theme.textMuted, fontSize: 12, marginBottom: 18, lineHeight: 1.6 }}>
-                Add a little context so RareSignal can better understand higher-symptom days without making assumptions.
+                {t.contextSub}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 32px' }}>
                 {/* Left col */}
                 <div>
-                    {secHead('💤 Sleep')}
+                    {secHead(`💤 ${t.sleepDomain}`)}
                     <div style={{ marginBottom: 14 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: theme.textSoft, marginBottom: 6 }}>Sleep duration</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: theme.textSoft, marginBottom: 6 }}>{t.sleepDurationLabel}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <button onClick={() => setSleep(sleepH - 0.5)} style={{ width: 30, height: 30, borderRadius: 6, border: `1px solid ${theme.borderSoft}`, background: 'transparent', color: theme.textSoft, fontSize: 16, cursor: 'pointer' }}>−</button>
                             <div style={{ flex: 1, textAlign: 'center' }}>
                                 <span style={{ fontSize: 20, fontWeight: 800, color: theme.teal }}>{sleepH.toFixed(1)}</span>
-                                <span style={{ fontSize: 12, color: theme.textMuted, marginLeft: 4 }}>hrs</span>
+                                <span style={{ fontSize: 12, color: theme.textMuted, marginLeft: 4 }}>{t.sleepDurationHours(sleepH).replace(`${sleepH.toFixed(1)} `, '')}</span>
                             </div>
                             <button onClick={() => setSleep(sleepH + 0.5)} style={{ width: 30, height: 30, borderRadius: 6, border: `1px solid ${theme.borderSoft}`, background: 'transparent', color: theme.textSoft, fontSize: 16, cursor: 'pointer' }}>+</button>
                         </div>
                     </div>
-                    <DocChoiceRow label="Sleep disruption" fieldKey="sleep_disruption"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }]}
+                    <DocChoiceRow label={t.sleepDisruptionLabel} fieldKey="sleep_disruption"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }]}
                         ctx={ctx} setCtx={setCtx} />
 
-                    {secHead('🏃 Activity & Exertion')}
-                    <DocChoiceRow label="Activity level today" fieldKey="activity_level"
-                        choices={[{ v: 'low', l: 'Low' }, { v: 'moderate', l: 'Moderate' }, { v: 'high', l: 'High' }]}
+                    {secHead(`🏃 ${t.activityDomain}`)}
+                    <DocChoiceRow label={t.activityLevelLabel} fieldKey="activity_level"
+                        choices={[{ v: 'low', l: t.choiceLow }, { v: 'moderate', l: t.choiceModerate }, { v: 'high', l: t.choiceHigh }]}
                         ctx={ctx} setCtx={setCtx} />
 
-                    {secHead('🧠 Stress & Cognitive Load')}
-                    <DocChoiceRow label="Mentally demanding day?" fieldKey="mentally_demanding_day"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }]}
+                    {secHead(`🧠 ${t.stressDomain}`)}
+                    <DocChoiceRow label={t.mentallyDemandingLabel} fieldKey="mentally_demanding_day"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }]}
                         ctx={ctx} setCtx={setCtx} />
 
-                    {secHead('💧 Hydration & Nutrition')}
-                    <DocChoiceRow label="Hydration level" fieldKey="hydration_level"
-                        choices={[{ v: 'low', l: 'Low' }, { v: 'adequate', l: 'Adequate' }, { v: 'high', l: 'High' }]}
+                    {secHead(`💧 ${t.hydrationDomain}`)}
+                    <DocChoiceRow label={t.hydrationLabel} fieldKey="hydration_level"
+                        choices={[{ v: 'low', l: t.choiceLow }, { v: 'adequate', l: t.choiceAdequate }, { v: 'high', l: t.choiceHigh }]}
                         ctx={ctx} setCtx={setCtx} />
                 </div>
 
                 {/* Right col — extra context (always visible in doctor mode) */}
                 <div>
-                    {secHead('🏃 Activity & Exertion (extra)')}
-                    <DocChoiceRow label="Any overexertion?" fieldKey="overexertion"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }]}
+                    {secHead(`🏃 ${t.activityDomain} (${t.contextMore.toLowerCase()})`)}
+                    <DocChoiceRow label={t.overexertionLabel} fieldKey="overexertion"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }]}
                         ctx={ctx} setCtx={setCtx} />
-                    <DocChoiceRow label="Did activity worsen symptoms?" fieldKey="activity_worsened_symptoms"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }, { v: 'unsure', l: 'Unsure' }]}
+                    <DocChoiceRow label={t.activityWorsenedLabel} fieldKey="activity_worsened_symptoms"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }, { v: 'unsure', l: t.choiceUnsure }]}
                         ctx={ctx} setCtx={setCtx} />
 
-                    {secHead('🧠 Stress (extra)')}
+                    {secHead(`🧠 ${t.stressDomain} (${t.contextMore.toLowerCase()})`)}
                     <div style={{ marginBottom: 14 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: theme.textSoft, marginBottom: 6 }}>Emotional strain (optional)</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: theme.textSoft, marginBottom: 6 }}>{t.emotionalStrainLabel}</div>
                         <textarea
                             value={ctx.emotional_strain_note || ''}
                             onChange={e => setCtx(p => ({ ...p, emotional_strain_note: e.target.value }))}
-                            placeholder="Optional note about emotional strain or cognitive load…"
+                            placeholder={t.emotionalStrainPlaceholder}
                             style={{
                                 width: '100%', border: `1px solid ${theme.borderSoft}`, borderRadius: 8,
                                 padding: '8px 10px', fontSize: 12, resize: 'vertical', minHeight: 56,
@@ -195,26 +196,26 @@ function DayContextPanel({ ctx, setCtx }) {
                         />
                     </div>
 
-                    {secHead('💧 Hydration & Nutrition (extra)')}
-                    <DocChoiceRow label="Large or unusual meals?" fieldKey="large_or_unusual_meals"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }]}
+                    {secHead(`💧 ${t.hydrationDomain} (${t.contextMore.toLowerCase()})`)}
+                    <DocChoiceRow label={t.unusualMealsLabel} fieldKey="large_or_unusual_meals"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }]}
                         ctx={ctx} setCtx={setCtx} />
-                    <DocChoiceRow label="Missed meals?" fieldKey="missed_meals"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }]}
+                    <DocChoiceRow label={t.missedMealsLabel} fieldKey="missed_meals"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }]}
                         ctx={ctx} setCtx={setCtx} />
 
-                    {secHead('🌡 Environment & Context')}
-                    <DocChoiceRow label="Heat exposure" fieldKey="heat_exposure"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }]}
+                    {secHead(`🌡 ${t.environmentDomain}`)}
+                    <DocChoiceRow label={t.heatExposureLabel} fieldKey="heat_exposure"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }]}
                         ctx={ctx} setCtx={setCtx} />
-                    <DocChoiceRow label="Cold exposure" fieldKey="cold_exposure"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }]}
+                    <DocChoiceRow label={t.coldExposureLabel} fieldKey="cold_exposure"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }]}
                         ctx={ctx} setCtx={setCtx} />
-                    <DocChoiceRow label="Illness or infection symptoms" fieldKey="illness_symptoms"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }]}
+                    <DocChoiceRow label={t.illnessSymptomsLabel} fieldKey="illness_symptoms"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }]}
                         ctx={ctx} setCtx={setCtx} />
-                    <DocChoiceRow label="Travel or routine change" fieldKey="travel_or_routine_change"
-                        choices={[{ v: 'yes', l: 'Yes' }, { v: 'no', l: 'No' }]}
+                    <DocChoiceRow label={t.travelChangeLabel} fieldKey="travel_or_routine_change"
+                        choices={[{ v: 'yes', l: t.choiceYes }, { v: 'no', l: t.choiceNo }]}
                         ctx={ctx} setCtx={setCtx} />
                 </div>
             </div>
@@ -222,10 +223,24 @@ function DayContextPanel({ ctx, setCtx }) {
     );
 }
 
-const DOC_HELPED_OPTIONS = ['Hydration', 'Pacing activity', 'Rest breaks', 'Quiet time', 'Regular meals', 'Protecting sleep'];
-const DOC_HARDER_OPTIONS = ['Overexertion', 'Poor sleep', 'Heat exposure', 'Stress load', 'Routine change', 'Large or unusual meals'];
-
 function DocSharedExperience({ exp, setExp }) {
+    const { t } = useLang();
+    const helpfulOptions = [
+        t.shareOptionHydration,
+        t.shareOptionPacing,
+        t.shareOptionRestBreaks,
+        t.shareOptionQuietTime,
+        t.shareOptionRegularMeals,
+        t.shareOptionSleepProtection,
+    ];
+    const harderOptions = [
+        t.shareOptionOverexertion,
+        t.shareOptionPoorSleep,
+        t.shareOptionHeat,
+        t.shareOptionStressLoad,
+        t.shareOptionRoutineChange,
+        t.shareOptionLargeMeals,
+    ];
     const toggle = (key, val) => setExp(p => ({
         ...p,
         [key]: p[key]?.includes(val) ? p[key].filter(x => x !== val) : [...(p[key] || []), val]
@@ -242,26 +257,26 @@ function DocSharedExperience({ exp, setExp }) {
     return (
         <GlassCard style={{ padding: 22, marginTop: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 }}>
-                💙 Anonymous Shared Experience
+                💙 {t.shareTitle}
             </div>
             <div style={{ color: theme.textMuted, fontSize: 12, marginBottom: 18, lineHeight: 1.6 }}>
-                You can add a brief anonymous experience from today to help others with this condition feel less alone.
+                {t.shareSub}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 32px' }}>
                 <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: theme.primary, marginBottom: 10 }}>💚 What helped today?</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: theme.primary, marginBottom: 10 }}>💚 {t.shareHelpfulLabel}</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 16 }}>
-                        {DOC_HELPED_OPTIONS.map(opt => {
+                        {helpfulOptions.map(opt => {
                             const active = (exp.helpful || []).includes(opt);
                             return <button key={opt} onClick={() => toggle('helpful', opt)} style={chipStyle(active, theme.primary)}>{active ? '✓ ' : ''}{opt}</button>;
                         })}
                     </div>
                 </div>
                 <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: theme.coral, marginBottom: 10 }}>🔴 What made today harder?</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: theme.coral, marginBottom: 10 }}>🔴 {t.shareHarderLabel}</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 16 }}>
-                        {DOC_HARDER_OPTIONS.map(opt => {
+                        {harderOptions.map(opt => {
                             const active = (exp.harder || []).includes(opt);
                             return <button key={opt} onClick={() => toggle('harder', opt)} style={chipStyle(active, theme.coral)}>{active ? '✓ ' : ''}{opt}</button>;
                         })}
@@ -270,12 +285,12 @@ function DocSharedExperience({ exp, setExp }) {
             </div>
 
             <div style={{ fontSize: 12, fontWeight: 700, color: theme.amber, marginBottom: 8 }}>
-                ✨ Anything you wish you had known earlier? <span style={{ fontWeight: 400, color: theme.textMuted }}>(optional)</span>
+                ✨ {t.shareWishLabel}
             </div>
             <textarea
                 value={exp.wisdom_snippet || ''}
                 onChange={e => setExp(p => ({ ...p, wisdom_snippet: e.target.value }))}
-                placeholder="One short sentence only…"
+                placeholder={t.shareWishPlaceholder}
                 maxLength={160}
                 style={{
                     width: '100%', border: `1px solid ${theme.borderSoft}`, borderRadius: 8,
