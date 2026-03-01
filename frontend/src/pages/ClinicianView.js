@@ -100,6 +100,7 @@ export default function ClinicianView({ patient }) {
   const [loadingAi, setLoadingAi] = useState(false);
   const [sensorSummary, setSensorSummary] = useState(null);
   const [latestLifestyleContext, setLatestLifestyleContext] = useState(null);
+  const [recentEntries, setRecentEntries] = useState([]);
   const sensorMetricKeys = DISEASE_SENSOR_METRICS[patient.disease] || ['heart_rate_avg', 'hrv_rmssd', 'activity_load', 'recovery_score'];
   const displayRiskLabel = (risk) => t.riskDisplayLabels?.[risk] || risk;
 
@@ -113,10 +114,13 @@ export default function ClinicianView({ patient }) {
       setSummary(sumRes.data);
       setRisk(riskRes.data);
       try {
-        const entriesRes = await getEntries(patient.id, 1);
-        setLatestLifestyleContext(entriesRes.data?.[0]?.lifestyle_context || null);
+        const entriesRes = await getEntries(patient.id, 7);
+        const entries = entriesRes.data || [];
+        setLatestLifestyleContext(entries[0]?.lifestyle_context || null);
+        setRecentEntries(entries);
       } catch (entryErr) {
         setLatestLifestyleContext(null);
+        setRecentEntries([]);
       }
       try {
         const sensorRes = await getSensorSummary(patient.id);
@@ -397,6 +401,169 @@ export default function ClinicianView({ patient }) {
           <div style={s.preBlock}>{summary.structured_text}</div>
         </div>
       )}
+
+      {/* ══════════════════════════════════════════════════════════════
+          Patient-side cards mirrored for the clinician (read-only)
+      ══════════════════════════════════════════════════════════════ */}
+      {recentEntries.length > 0 && (() => {
+        const latest = recentEntries[0];
+        const prev = recentEntries[1];
+        const symKeys = Object.keys(latest?.symptoms || {});
+
+        // Trigger frequency across fetched entries
+        const trigFreq = {};
+        recentEntries.forEach(e => (e.triggers || []).forEach(tr => {
+          trigFreq[tr] = (trigFreq[tr] || 0) + 1;
+        }));
+        const topTriggers = Object.entries(trigFreq).sort((a, b) => b[1] - a[1]);
+
+        // Rolled-up patient notes
+        const allNotes = recentEntries
+          .filter(e => e.notes)
+          .map(e => ({
+            date: e.logged_at ? new Date(e.logged_at).toLocaleDateString() : '—',
+            text: e.notes,
+          }));
+
+        return (
+          <>
+            {/* 1 ── Symptom Snapshot KPIs */}
+            {symKeys.length > 0 && (
+              <div style={{ ...s.card, marginTop: 16 }}>
+                <div style={s.cardTitle}>📊 Symptom Snapshot</div>
+                <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 14 }}>
+                  Latest entry {latest.logged_at ? `· ${new Date(latest.logged_at).toLocaleString()}` : ''}
+                  {prev ? ' · ▲▼ show change from previous entry' : ''}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))', gap: 10 }}>
+                  {symKeys.map(sym => {
+                    const cur = latest.symptoms[sym] ?? 0;
+                    const prv = prev?.symptoms?.[sym];
+                    const diff = prv != null ? cur - prv : null;
+                    const arrow = diff == null ? '' : diff > 0.4 ? '▲' : diff < -0.4 ? '▼' : '→';
+                    const arrowCol = diff > 0.4 ? theme.coral : diff < -0.4 ? '#22c55e' : theme.textMuted;
+                    const col = cur >= 7 ? theme.coral : cur >= 4 ? theme.amber : theme.primary;
+                    return (
+                      <div key={sym} style={{
+                        background: 'rgba(255,255,255,0.04)', borderRadius: 12,
+                        border: `1px solid ${col}40`, padding: '12px 14px',
+                      }}>
+                        <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 4, textTransform: 'capitalize' }}>
+                          {sym.replace(/_/g, ' ')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <span style={{ fontSize: 22, fontWeight: 800, color: col }}>{cur.toFixed(1)}</span>
+                          <span style={{ fontSize: 11, color: theme.textMuted }}>/10</span>
+                          {arrow && <span style={{ fontSize: 13, fontWeight: 700, color: arrowCol }}>{arrow}</span>}
+                        </div>
+                        <div style={{ marginTop: 6, height: 4, borderRadius: 4, background: 'rgba(255,255,255,0.08)' }}>
+                          <div style={{
+                            height: '100%', width: `${(cur / 10) * 100}%`, borderRadius: 4,
+                            background: `linear-gradient(90deg, ${theme.primary}, ${col})`,
+                            transition: 'width 0.4s',
+                          }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 2 ── Trigger Frequency */}
+            {topTriggers.length > 0 && (
+              <div style={{ ...s.card, marginTop: 16 }}>
+                <div style={s.cardTitle}>🔥 Trigger Frequency — Last {recentEntries.length} Entries</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                  {topTriggers.map(([tr, count]) => {
+                    const pct = count / recentEntries.length;
+                    const col = pct >= 0.7 ? theme.coral : pct >= 0.4 ? theme.amber : theme.primary;
+                    return (
+                      <div key={tr} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        background: `${col}14`, border: `1px solid ${col}44`,
+                        borderRadius: 20, padding: '5px 14px',
+                      }}>
+                        <span style={{ fontSize: 12, color: theme.textSoft, textTransform: 'capitalize' }}>
+                          {tr.replace(/_/g, ' ')}
+                        </span>
+                        <span style={{
+                          fontSize: 11, fontWeight: 800, color: col,
+                          background: `${col}22`, borderRadius: 10, padding: '1px 7px',
+                        }}>{count}×</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 3 ── Recent Entry Log */}
+            <div style={{ ...s.card, marginTop: 16 }}>
+              <div style={s.cardTitle}>📋 Recent Entry Log</div>
+              <div style={{ marginTop: 10 }}>
+                {recentEntries.slice(0, 5).map((entry, idx) => {
+                  const topSym = Object.entries(entry.symptoms || {})
+                    .sort((a, b) => b[1] - a[1]).slice(0, 3);
+                  return (
+                    <div key={idx} style={{
+                      padding: '10px 0',
+                      borderBottom: idx < Math.min(recentEntries.length, 5) - 1 ? `1px solid ${theme.border}` : 'none',
+                      display: 'flex', gap: 12, alignItems: 'flex-start',
+                    }}>
+                      <div style={{ fontSize: 11, color: theme.textMuted, minWidth: 88, paddingTop: 2 }}>
+                        {entry.logged_at ? new Date(entry.logged_at).toLocaleDateString() : '—'}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: topSym.length ? 4 : 0 }}>
+                          {topSym.map(([sym, val]) => {
+                            const col = val >= 7 ? theme.coral : val >= 4 ? theme.amber : theme.primary;
+                            return (
+                              <span key={sym} style={{
+                                fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                                background: `${col}18`, color: col, fontWeight: 600,
+                              }}>
+                                {sym.replace(/_/g, ' ')} {val.toFixed(1)}
+                              </span>
+                            );
+                          })}
+                        </div>
+                        {entry.notes && (
+                          <div style={{ fontSize: 12, color: theme.textMuted, fontStyle: 'italic', marginTop: 2 }}>
+                            "{entry.notes.length > 100 ? entry.notes.slice(0, 100) + '…' : entry.notes}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 4 ── Patient Notes roll-up */}
+            {allNotes.length > 0 && (
+              <div style={{ ...s.card, marginTop: 16 }}>
+                <div style={s.cardTitle}>💬 Patient Notes</div>
+                <div style={{ marginTop: 10 }}>
+                  {allNotes.slice(0, 5).map((n, i) => (
+                    <div key={i} style={{
+                      padding: '8px 0',
+                      borderBottom: i < allNotes.length - 1 ? `1px solid ${theme.border}` : 'none',
+                      display: 'flex', gap: 12,
+                    }}>
+                      <div style={{ fontSize: 11, color: theme.textMuted, minWidth: 88 }}>{n.date}</div>
+                      <div style={{ fontSize: 12, color: theme.textSoft, fontStyle: 'italic', lineHeight: 1.6 }}>
+                        "{n.text}"
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }
+

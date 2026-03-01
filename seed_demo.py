@@ -30,35 +30,41 @@ DISEASE_CONFIGS = {
     "POTS": {
         "symptoms": ["dizziness", "heart_rate_elevation", "fatigue", "brain_fog",
                      "syncope_nearness", "nausea", "exercise_intolerance",
-                     "sleep_quality", "anxiety", "gi_symptoms"],
+                     "sleep_quality", "anxiety", "gi_symptoms",
+                     "stress_symptom_severity"],
         "triggers": ["dehydration", "heat_exposure", "prolonged_standing", "stress",
                      "sleep_deprivation", "alcohol", "large_meals", "exercise"],
         "baselines": {"dizziness": 4.0, "heart_rate_elevation": 3.5, "fatigue": 5.0,
                       "brain_fog": 4.5, "syncope_nearness": 2.0, "nausea": 2.5,
                       "exercise_intolerance": 5.5, "sleep_quality": 4.0,
-                      "anxiety": 3.5, "gi_symptoms": 2.0}
+                      "anxiety": 3.5, "gi_symptoms": 2.0,
+                      "stress_symptom_severity": 3.5}
     },
     "EDS": {
         "symptoms": ["joint_pain", "fatigue", "skin_fragility", "proprioception_loss",
                      "subluxation_frequency", "gi_symptoms", "pots_symptoms",
-                     "sleep_quality", "brain_fog", "anxiety"],
+                     "sleep_quality", "brain_fog", "anxiety",
+                     "stress_symptom_severity"],
         "triggers": ["overexertion", "weather_change", "stress", "sleep_deprivation",
                      "hormonal_changes", "dehydration", "infection"],
         "baselines": {"joint_pain": 4.5, "fatigue": 5.0, "skin_fragility": 3.0,
                       "proprioception_loss": 3.5, "subluxation_frequency": 2.0,
                       "gi_symptoms": 2.5, "pots_symptoms": 2.0, "sleep_quality": 4.5,
-                      "brain_fog": 4.0, "anxiety": 3.0}
+                      "brain_fog": 4.0, "anxiety": 3.0,
+                      "stress_symptom_severity": 3.0}
     },
     "PCD": {
         "symptoms": ["cough_severity", "nasal_congestion", "breathlessness", "sputum_production",
                      "chest_tightness", "fatigue", "infection_frequency",
-                     "sleep_quality", "exercise_intolerance", "hearing_issues"],
+                     "sleep_quality", "exercise_intolerance", "hearing_issues",
+                     "stress_symptom_severity"],
         "triggers": ["cold_weather", "allergens", "infection", "exertion",
                      "smoke_exposure", "stress", "sleep_deprivation"],
         "baselines": {"cough_severity": 4.0, "nasal_congestion": 5.0, "breathlessness": 3.5,
                       "sputum_production": 4.5, "chest_tightness": 3.0, "fatigue": 4.5,
                       "infection_frequency": 2.0, "sleep_quality": 4.0,
-                      "exercise_intolerance": 3.5, "hearing_issues": 3.0}
+                      "exercise_intolerance": 3.5, "hearing_issues": 3.0,
+                      "stress_symptom_severity": 3.0}
     }
 }
 

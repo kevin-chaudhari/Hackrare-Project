@@ -73,4 +73,18 @@ export const getFlareAlert = (patientId) =>
 export const getHealthReport = (patientId, windowDays = 7) =>
   api.get(`/health-report/${patientId}?window_days=${windowDays}`);
 
+// ── CSV / Excel Bulk Upload ────────────────────────────────────────────────────
+export const uploadSymptomCSV = (patientId, formData) =>
+  api.post(`/upload-symptom-csv/${patientId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  });
+
+// ── PDF Clinical Notes Upload ──────────────────────────────────────────────────
+export const uploadSymptomPDF = (patientId, formData) =>
+  api.post(`/upload-symptom-pdf/${patientId}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 45000,
+  });
+
 export default api;

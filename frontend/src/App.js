@@ -8,6 +8,8 @@ import PatientSetup from './pages/PatientSetup';
 import HPOClusterView from './pages/HPOClusterView';
 import HealthReport from './pages/HealthReport';
 import SharedExperiences from './pages/SharedExperiences';
+import LogSymptoms from './pages/LogSymptoms';
+import GestureInput from './pages/GestureInput';
 import { listPatients, getFlareAlert } from './api';
 import theme from './theme';
 
@@ -25,11 +27,12 @@ const DISEASE_COLORS = {
   RRP: { bg: '#2d0a0a', fg: '#f87171' }, PRION: { bg: '#0c0a09', fg: '#a8a29e' },
 };
 
-const NAV_PAGE_IDS = ['dashboard', 'setup', 'input', 'signals', 'clinician', 'shared_experiences', 'health_report'];
+const NAV_PAGE_IDS = ['dashboard', 'setup', 'input', 'signals', 'clinician', 'health_report', 'log_symptoms', 'gesture_input'];
 const GROUP_MAP = {
   dashboard: 'CORE', setup: 'CORE',
-  clinician: 'ANALYSIS', shared_experiences: 'ANALYSIS',
+  clinician: 'ANALYSIS',
   input: 'MONITORING', signals: 'MONITORING', health_report: 'MONITORING',
+  log_symptoms: 'MONITORING', gesture_input: 'MONITORING',
 };
 
 // ─── Global 3D keyframes injected once ──────────────────────────────────────
@@ -297,7 +300,7 @@ function DashboardOverview({ patients, selectedPatient, setSelectedPatient, setP
         <div style={c.card}>
           <div style={c.cardTitle}>{t.quickActionsTitle}</div>
           <button style={c.actionBtn(true)} onClick={() => setPage('signals')}>{t.quickCompute}</button>
-          <button style={c.actionBtn(false)} onClick={() => setPage('input')}>{t.quickLog}</button>
+          <button style={c.actionBtn(false)} onClick={() => setPage('log_symptoms')}>{t.quickLog}</button>
           <button style={c.actionBtn(false)} onClick={() => setPage('clinician')}>{t.quickClinician}</button>
           <button style={c.actionBtn(false)} onClick={() => setPage('setup')}>{t.quickEdit}</button>
         </div>
@@ -346,7 +349,9 @@ export default function App() {
     input: t.navLogSymptoms, signals: t.navHistory, clinician: t.navClinicianView,
     hpo_cluster: t.navHpoCluster,
     shared_experiences: t.navSharedExperiences,
-    health_report: t.navHealthReport
+    health_report: t.navHealthReport,
+    log_symptoms: '📝 Log Symptoms',
+    gesture_input: '🖐 Easy Input',
   };
 
   const NAV_ITEMS = [
@@ -355,9 +360,10 @@ export default function App() {
     { id: 'clinician', label: t.navClinicianView, icon: '◇', group: 'ANALYSIS' },
     { id: 'shared_experiences', label: t.navSharedExperiences, icon: '◌', group: 'ANALYSIS' },
     { id: 'hpo_cluster', label: t.navHpoCluster, icon: '✱', group: 'ANALYSIS' },
-    { id: 'input', label: t.navLogSymptoms, icon: '△', group: 'MONITORING' },
+    { id: 'log_symptoms', label: '📝 Log Symptoms', icon: '📝', group: 'MONITORING' },
+    { id: 'gesture_input', label: '🖐 Easy Input', icon: '🖐', group: 'MONITORING' },
     { id: 'signals', label: t.navHistory, icon: '▷', group: 'MONITORING' },
-    { id: 'health_report', label: t.navHealthReport, icon: '🏥', group: 'MONITORING' },
+    { id: 'health_report', label: 'Health Report', icon: '🏥', group: 'MONITORING' },
   ];
 
   const groups = ['CORE', 'ANALYSIS', 'MONITORING'];
@@ -461,6 +467,14 @@ export default function App() {
           {page === 'input' && (
             selectedPatient
               ? <PatientDashboard patient={selectedPatient} />
+              : <div style={s.noPatient}><p>{t.noPatientOption}</p></div>
+          )}
+          {page === 'log_symptoms' && (
+            <LogSymptoms patient={selectedPatient} />
+          )}
+          {page === 'gesture_input' && (
+            selectedPatient
+              ? <GestureInput patient={selectedPatient} />
               : <div style={s.noPatient}><p>{t.noPatientOption}</p></div>
           )}
           {page === 'signals' && (

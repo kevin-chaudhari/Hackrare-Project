@@ -617,6 +617,213 @@ def add_symptom_entry(body: SymptomEntryCreate, db: Session = Depends(get_db)):
     )
 
 
+# ─── CSV / Spreadsheet Upload ──────────────────────────────────────────────────
+
+@app.post("/upload-symptom-csv/{patient_id}", tags=["Entries"])
+async def upload_symptom_csv(
+    patient_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk-import symptom entries from a CSV or Excel file.
+    Expected columns (case-insensitive):
+      date | symptom_<name> (multiple) | triggers | notes
+    OR spreadsheet format:
+      date | symptom_name | value | triggers | notes  (one row per symptom)
+    Returns { imported, skipped, errors }
+    """
+    import io, csv
+    patient = _get_patient_or_404(patient_id, db)
+    config = DISEASE_CONFIGS.get(patient.disease, {})
+    valid_symptoms = set(config.get("symptoms", []))
+
+    content = await file.read()
+    filename = (file.filename or "").lower()
+
+    # ── Parse CSV or Excel ──
+    rows = []
+    if filename.endswith((".xlsx", ".xls")):
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True)
+            ws = wb.active
+            headers = [str(c.value or "").strip().lower() for c in next(ws.iter_rows(min_row=1, max_row=1))]
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                rows.append(dict(zip(headers, [v for v in row])))
+        except ImportError:
+            raise HTTPException(400, "openpyxl not installed. Use CSV or run: pip install openpyxl")
+    else:
+        text = content.decode("utf-8", errors="replace")
+        reader = csv.DictReader(io.StringIO(text))
+        for row in reader:
+            rows.append({k.strip().lower(): v for k, v in row.items()})
+
+    imported = 0
+    errors = []
+
+    # Detect format
+    headers_set = set(rows[0].keys()) if rows else set()
+    is_long_format = "symptom_name" in headers_set and "value" in headers_set
+
+    if is_long_format:
+        # Long format: one row per (date, symptom, value)
+        by_date: dict = {}
+        for i, row in enumerate(rows, start=2):
+            try:
+                date_str = str(row.get("date", "")).strip()
+                sym = str(row.get("symptom_name", "")).strip().lower().replace(" ", "_")
+                val = float(row.get("value", 0))
+                triggers_raw = str(row.get("triggers", "")).strip()
+                notes = str(row.get("notes", "")).strip() or None
+                if sym not in valid_symptoms:
+                    errors.append(f"Row {i}: Unknown symptom '{sym}'")
+                    continue
+                if not (0 <= val <= 10):
+                    errors.append(f"Row {i}: Value {val} out of range for '{sym}'")
+                    continue
+                key = date_str or datetime.utcnow().isoformat()
+                if key not in by_date:
+                    by_date[key] = {"symptoms": {}, "triggers": [], "notes": notes}
+                by_date[key]["symptoms"][sym] = round(val, 1)
+                if triggers_raw:
+                    by_date[key]["triggers"] = [t.strip() for t in triggers_raw.split(",") if t.strip()]
+            except Exception as e:
+                errors.append(f"Row {i}: {e}")
+
+        for date_str, data in by_date.items():
+            try:
+                ts = datetime.fromisoformat(date_str) if date_str else datetime.utcnow()
+            except ValueError:
+                ts = datetime.utcnow()
+            entry = SymptomEntry(
+                patient_id=patient_id,
+                timestamp=ts,
+                symptoms_json=json.dumps(data["symptoms"]),
+                triggers_json=json.dumps(data["triggers"]),
+                lifestyle_json=json.dumps({}),
+                shared_experience_json=json.dumps({}),
+                notes=data["notes"],
+            )
+            db.add(entry); db.commit(); db.refresh(entry)
+            baseline = _get_or_init_baseline(patient_id, db)
+            _update_baseline_from_entry(baseline, data["symptoms"], db)
+            imported += 1
+    else:
+        # Wide format: columns are symptom_<name>
+        sym_cols = {k: k.replace("symptom_", "") for k in headers_set if k.startswith("symptom_")}
+        for i, row in enumerate(rows, start=2):
+            try:
+                date_str = str(row.get("date", "")).strip()
+                ts = datetime.fromisoformat(date_str) if date_str else datetime.utcnow()
+            except ValueError:
+                ts = datetime.utcnow()
+            symptoms: dict = {}
+            row_errors = []
+            for col, sym in sym_cols.items():
+                if sym not in valid_symptoms:
+                    continue
+                raw = row.get(col, "")
+                if raw is None or str(raw).strip() == "":
+                    continue
+                try:
+                    val = float(raw)
+                    if 0 <= val <= 10:
+                        symptoms[sym] = round(val, 1)
+                    else:
+                        row_errors.append(f"Row {i}: {sym}={val} out of range")
+                except (ValueError, TypeError):
+                    row_errors.append(f"Row {i}: Cannot parse {col}='{raw}'")
+            errors.extend(row_errors)
+            if not symptoms:
+                continue
+            triggers_raw = str(row.get("triggers", "")).strip()
+            triggers = [t.strip() for t in triggers_raw.split(",") if t.strip()] if triggers_raw else []
+            notes = str(row.get("notes", "")).strip() or None
+            entry = SymptomEntry(
+                patient_id=patient_id,
+                timestamp=ts,
+                symptoms_json=json.dumps(symptoms),
+                triggers_json=json.dumps(triggers),
+                lifestyle_json=json.dumps({}),
+                shared_experience_json=json.dumps({}),
+                notes=notes,
+            )
+            db.add(entry); db.commit(); db.refresh(entry)
+            baseline = _get_or_init_baseline(patient_id, db)
+            _update_baseline_from_entry(baseline, symptoms, db)
+            imported += 1
+
+    return {"imported": imported, "skipped": len(errors), "errors": errors[:20]}
+
+
+# ─── PDF Clinical Notes Upload ─────────────────────────────────────────────────
+
+@app.post("/upload-symptom-pdf/{patient_id}", tags=["Entries"])
+async def upload_symptom_pdf(
+    patient_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Extract symptom severities from a clinical notes PDF using NLP.
+    Returns extracted symptoms with confidence scores before committing.
+    Automatically creates a SymptomEntry from the extracted data.
+    """
+    from backend.nlp_extractor import extract_symptoms_from_text, extract_text_from_pdf
+
+    patient = _get_patient_or_404(patient_id, db)
+    config = DISEASE_CONFIGS.get(patient.disease, {})
+    disease_symptoms = config.get("symptoms", [])
+
+    pdf_bytes = await file.read()
+    if not pdf_bytes:
+        raise HTTPException(400, "Uploaded file is empty")
+
+    try:
+        text = extract_text_from_pdf(pdf_bytes)
+    except RuntimeError as e:
+        raise HTTPException(422, str(e))
+
+    if not text.strip():
+        raise HTTPException(422, "Could not extract any text from the PDF. Ensure it is not a scanned image-only PDF.")
+
+    extracted = extract_symptoms_from_text(text, disease_symptoms, use_gemini=True)
+
+    if not extracted:
+        return {
+            "extracted_symptoms": {},
+            "confidence": {},
+            "entry_id": None,
+            "raw_text_preview": text[:500],
+            "message": "No recognisable symptom mentions found in the PDF."
+        }
+
+    symptoms_dict = {sym: val for sym, (val, _conf) in extracted.items()}
+    confidence_dict = {sym: conf for sym, (_val, conf) in extracted.items()}
+
+    entry = SymptomEntry(
+        patient_id=patient_id,
+        timestamp=datetime.utcnow(),
+        symptoms_json=json.dumps(symptoms_dict),
+        triggers_json=json.dumps([]),
+        lifestyle_json=json.dumps({}),
+        shared_experience_json=json.dumps({}),
+        notes=f"Extracted from PDF: {file.filename}"
+    )
+    db.add(entry); db.commit(); db.refresh(entry)
+    baseline = _get_or_init_baseline(patient_id, db)
+    _update_baseline_from_entry(baseline, symptoms_dict, db)
+
+    return {
+        "extracted_symptoms": symptoms_dict,
+        "confidence": confidence_dict,
+        "entry_id": entry.id,
+        "raw_text_preview": text[:500],
+        "message": f"Successfully extracted {len(symptoms_dict)} symptoms and saved entry."
+    }
+
+
 @app.get("/patients/{patient_id}/entries", response_model=List[SymptomEntryResponse], tags=["Entries"])
 def get_entries(patient_id: str, limit: int = 100, db: Session = Depends(get_db)):
     _get_patient_or_404(patient_id, db)
