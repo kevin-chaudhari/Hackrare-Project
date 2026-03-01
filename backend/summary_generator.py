@@ -335,6 +335,9 @@ def generate_structured_summary(
     missingness = signals.get("missingness", {})
     red_flags = signals.get("red_flags", [])
 
+    from backend.disease_config import DISEASE_CONFIGS
+    hpo_mapping = DISEASE_CONFIGS.get(disease, {}).get("hpo_terms", {})
+
     # ── Primary Deviations
     primary_deviations = []
     for sym, detail in sorted(
@@ -345,6 +348,9 @@ def generate_structured_summary(
         z = detail.get("z_score", 0.0)
         if abs(z) >= 1.0:
             label = sym.replace("_", " ").title()
+            hpo_term = hpo_mapping.get(sym, "")
+            if hpo_term:
+                label += f" ({hpo_term})"
             primary_deviations.append(
                 f"{label}: {z:+.1f}σ from baseline [{detail.get('interpretation','stable').upper()}]"
             )
@@ -426,42 +432,6 @@ Escalation Guidance:
 {SCOPE_DISCLAIMER}
 """.strip()
 
-    # ─────────────────────────────────────────────────────────
-    # Gemini Enhancement (Optional)
-    # ─────────────────────────────────────────────────────────
-    
-    is_ai_generated = False
-
-    if GEMINI_MODEL:
-        try:
-            prompt = f"""
-You are a clinical documentation assistant.
-
-Rewrite the following structured data into a concise,
-professional clinician dashboard summary.
-
-Rules:
-- Do NOT diagnose or recommend treatment.
-- Only summarize provided data.
-- End EXACTLY with:
-"{SCOPE_DISCLAIMER}"
-
-Raw Data:
-{structured_text}
-"""
-
-            response = GEMINI_MODEL.generate_content(prompt)
-
-            if response and response.text:
-                structured_text = response.text.strip()
-                is_ai_generated = True
-
-            time.sleep(1)  # simple rate protection
-
-        except Exception:
-            # silent fallback — never expose API errors in medical UI
-            pass
-
     return {
         "patient_id": patient_id,
         "disease_name": disease_name,
@@ -478,5 +448,44 @@ Raw Data:
         "red_flags": [rf.replace("_", " ").title() for rf in red_flags],
         "scope_disclaimer": SCOPE_DISCLAIMER,
         "structured_text": structured_text,
-        "is_ai_generated": is_ai_generated
+        "is_ai_generated": False
     }
+
+
+def generate_detailed_ai_report(patient_id: str, disease_name: str, deviations: list[str]) -> str:
+    """
+    Takes a specific list of deviations (including HPO terms) and prompts
+    Gemini to provide a complete, conversational clinician explainer report,
+    while fiercely respecting the non-diagnostic scope constraint.
+    """
+    if not GEMINI_MODEL:
+        return "AI features are disabled: GEMINI_API_KEY not configured."
+    
+    dev_str = "\n".join(f"- {d}" for d in deviations)
+    prompt = f"""
+You are an expert clinical documentation assistant.
+The following is a list of active statistical signal deviations for Patient {patient_id} with {disease_name}.
+These deviations map to specific Human Phenotype Ontology (HPO) terms provided in parentheses.
+
+SIGNAL DEVIATIONS:
+{dev_str}
+
+Please generate a "Complete AI Report" elaborating on what these specific deviations, considered together,
+might imply regarding the patient's current functional and physiological trajectory. 
+
+Rules:
+1. Explain the medical/physiological relevance of the provided HPO terms.
+2. Synthesize how these specific deviations interact in the context of {disease_name}.
+3. DO NOT DIAGNOSE, PROGNOSTICATE, OR RECOMMEND SPECIFIC LIFESTYLE/MEDICAL TREATMENTS.
+4. You may suggest general clinical next steps (e.g., routine monitoring, specialist referral).
+5. End EXACTLY with:
+"{SCOPE_DISCLAIMER}"
+"""
+    try:
+        response = GEMINI_MODEL.generate_content(prompt)
+        if response and response.text:
+            return response.text.strip()
+    except Exception as e:
+        return f"Failed to generate report: {str(e)}"
+        
+    return "Generation failed."

@@ -6,27 +6,32 @@ import {
   BarChart, Bar, ReferenceLine
 } from 'recharts';
 import { computeSignals, getHistory } from '../api';
+import { useLang } from '../i18n/LanguageContext';
 
-const RISK_COLORS = { LOW: '#10b981', MODERATE: '#f59e0b', HIGH: '#ef4444', CRITICAL: '#b91c1c', INSUFFICIENT_DATA: '#64748b' };
+
+const RISK_COLORS = { LOW: '#3fb950', MODERATE: '#d29922', HIGH: '#f85149', CRITICAL: '#8b0000', INSUFFICIENT_DATA: '#484f58' };
 
 const s = {
-  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 },
-  card: { background: '#1e293b', borderRadius: 12, padding: 24, border: '1px solid #334155', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', color: '#f8fafc' },
-  title: { fontSize: 16, fontWeight: 700, color: '#f8fafc', marginBottom: 16 },
-  riskBadge: (r) => ({ display: 'inline-block', padding: '4px 14px', borderRadius: 20, fontWeight: 700, fontSize: 14, background: RISK_COLORS[r] || '#475569', color: '#fff' }),
-  statGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 },
-  stat: { background: '#1e293b', borderRadius: 10, padding: '16px 20px', border: '1px solid #334155', textAlign: 'center' },
-  statVal: { fontSize: 28, fontWeight: 800, color: '#60a5fa' },
-  statLabel: { fontSize: 12, color: '#94a3b8', marginTop: 4 },
-  refreshBtn: { background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 20 },
-  loading: { padding: 60, textAlign: 'center', color: '#94a3b8' },
-  zRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #334155' },
-  zName: { fontSize: 13, color: '#e2e8f0', textTransform: 'capitalize' },
-  zVal: (v) => ({ fontWeight: 700, fontSize: 14, color: Math.abs(v) >= 2 ? '#fca5a5' : Math.abs(v) >= 1 ? '#fcd34d' : '#86efac' }),
-  noData: { textAlign: 'center', padding: '40px 0', color: '#64748b', fontSize: 14 }
+  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 },
+  card: { background: '#161b22', borderRadius: 14, padding: 24, border: '1px solid #21262d', color: '#e6edf3' },
+  title: { fontSize: 11, fontWeight: 700, color: '#484f58', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 16 },
+  riskBadge: (r) => ({ display: 'inline-block', padding: '4px 14px', borderRadius: 20, fontWeight: 800, fontSize: 14, background: `${RISK_COLORS[r]}22` || '#21262d', color: RISK_COLORS[r] || '#484f58', border: `1px solid ${RISK_COLORS[r] || '#30363d'}` }),
+  statGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 },
+  stat: { background: '#161b22', borderRadius: 12, padding: '18px 20px', border: '1px solid #21262d', textAlign: 'center' },
+  statVal: { fontSize: 28, fontWeight: 800, color: '#58a6ff' },
+  statLabel: { fontSize: 11, color: '#484f58', marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 },
+  refreshBtn: { background: 'linear-gradient(135deg, #3fb950, #1a7f37)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 },
+  loading: { padding: 60, textAlign: 'center', color: '#484f58' },
+  zRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #21262d' },
+  zName: { fontSize: 13, color: '#c9d1d9', textTransform: 'capitalize' },
+  zVal: (v) => ({ fontWeight: 700, fontSize: 13, color: Math.abs(v) >= 2 ? '#f85149' : Math.abs(v) >= 1 ? '#d29922' : '#3fb950', background: `${Math.abs(v) >= 2 ? '#f85149' : Math.abs(v) >= 1 ? '#d29922' : '#3fb950'}1a`, padding: '2px 10px', borderRadius: 20 }),
+  noData: { textAlign: 'center', padding: '40px 0', color: '#484f58', fontSize: 14 },
+  pageTitle: { fontSize: 24, fontWeight: 800, color: '#e6edf3', letterSpacing: '-0.5px', marginBottom: 4 },
+  pageSub: { fontSize: 14, color: '#484f58', marginBottom: 24 },
 };
 
 export default function SignalVisualization({ patient }) {
+  const { t } = useLang();
   const [signals, setSignals] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -49,7 +54,7 @@ export default function SignalVisualization({ patient }) {
 
   useEffect(() => { refresh(); }, [patient.id]);
 
-  if (loading && !signals) return <div style={s.loading}>Computing signals...</div>;
+  if (loading && !signals) return <div style={s.loading}>{t.computeFirst}</div>;
 
   const fis = signals?.functional_impact || {};
   const radarData = [

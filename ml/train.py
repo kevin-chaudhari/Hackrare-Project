@@ -43,6 +43,15 @@ def set_seed(seed: int = 42):
     np.random.seed(seed)
     torch.manual_seed(seed)
 
+# ─── Global HPO Vocab ────────────────────────────────────────────────────────
+ALL_HPO_TERMS = set()
+for d, config in DISEASE_CONFIGS.items():
+    if "hpo_terms" in config:
+        for sym, hpo in config["hpo_terms"].items():
+            ALL_HPO_TERMS.add(hpo)
+ALL_HPO_TERMS = sorted(list(ALL_HPO_TERMS))
+HPO_TO_IDX = {hpo: i for i, hpo in enumerate(ALL_HPO_TERMS)}
+
 
 # ─── Synthetic Data Generator ─────────────────────────────────────────────────
 def generate_synthetic_patient(
@@ -255,12 +264,24 @@ class RareSignalDataset(Dataset):
 
         risk_label = window[-1]["risk_label"]
 
+        # HPO / Phenotype features (active if > baseline)
+        hpo_multihot = np.zeros(len(HPO_TO_IDX), dtype=np.float32)
+        hpo_mapping = self.config.get("hpo_terms", {})
+        for sym in self.symptoms:
+            val = last["symptoms"].get(sym, 5.0)
+            mu = last["mu"].get(sym, 5.0)
+            if val > mu + 0.5:  # active phenotype
+                hpo_term = hpo_mapping.get(sym)
+                if hpo_term and hpo_term in HPO_TO_IDX:
+                    hpo_multihot[HPO_TO_IDX[hpo_term]] = 1.0
+
         return {
             "x_seq": torch.tensor(x_seq),
             "baseline_feats": torch.tensor(baseline_feats),
             "trigger_ids": torch.tensor(trigger_ids),
             "vol_feats": torch.tensor(vol_feats),
             "disease_ids": torch.tensor(self.disease_idx, dtype=torch.long),
+            "hpo_multihot": torch.tensor(hpo_multihot),
             "risk_label": torch.tensor(risk_label, dtype=torch.long),
             "fis_target": torch.tensor(fis_targets),
             "forecast_target": torch.tensor(forecast_target)
@@ -301,7 +322,8 @@ def train(
     model = RareSignalModel(
         symptom_dim=len(config["symptoms"]),
         trigger_vocab=len(config["triggers"]),
-        n_diseases=6, hidden=64, lstm_layers=2, n_heads=4, dropout=0.3
+        hpo_vocab=len(HPO_TO_IDX),
+        n_diseases=22, hidden=64, lstm_layers=2, n_heads=4, dropout=0.3
     ).to(device)
 
     # Class weights for imbalanced risk labels
@@ -342,7 +364,8 @@ def train(
                 baseline_feats=batch["baseline_feats"].to(device),
                 trigger_ids=batch["trigger_ids"].to(device),
                 vol_feats=batch["vol_feats"].to(device),
-                disease_ids=batch["disease_ids"].to(device)
+                disease_ids=batch["disease_ids"].to(device),
+                hpo_multihot=batch["hpo_multihot"].to(device)
             )
             l_risk = criterion_risk(out["risk_logits"], batch["risk_label"].to(device))
             l_fis = criterion_fis(out["fis_scores"], batch["fis_target"].to(device))
@@ -364,7 +387,8 @@ def train(
                     baseline_feats=batch["baseline_feats"].to(device),
                     trigger_ids=batch["trigger_ids"].to(device),
                     vol_feats=batch["vol_feats"].to(device),
-                    disease_ids=batch["disease_ids"].to(device)
+                    disease_ids=batch["disease_ids"].to(device),
+                    hpo_multihot=batch["hpo_multihot"].to(device)
                 )
                 l_risk = criterion_risk(out["risk_logits"], batch["risk_label"].to(device))
                 l_fis = criterion_fis(out["fis_scores"], batch["fis_target"].to(device))
@@ -409,7 +433,7 @@ def train(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--disease", default="POTS",
-                        choices=["ENS", "EDS", "POTS", "Heterotaxy", "PCD", "FMF"])
+                        choices=["ENS", "EDS", "POTS", "Heterotaxy", "PCD", "FMF", "CF", "HD", "RTT", "MFS", "SMA", "FXS", "NF1", "PKU", "WD", "Pompe", "TS", "Gaucher", "Alkaptonuria", "Achondroplasia", "RRP", "PRION"])
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--patients", type=int, default=100)
     args = parser.parse_args()

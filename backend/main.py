@@ -16,12 +16,13 @@ from backend.schemas import (
     SignalRequest, SignalResponse,
     RiskPredictionRequest, RiskPredictionResponse,
     SummaryRequest, ClinicalSummaryResponse,
+    DetailedReportRequest, DetailedReportResponse,
     PatientHistoryResponse, SignalHistoryPoint
 )
 from backend.signal_engine import (
     compute_all_signals, update_ewma_baseline, initialize_baseline_from_history
 )
-from backend.summary_generator import generate_structured_summary
+from backend.summary_generator import generate_structured_summary, generate_detailed_ai_report
 from backend.disease_config import DISEASE_CONFIGS
 
 
@@ -485,6 +486,19 @@ def generate_summary(body: SummaryRequest, db: Session = Depends(get_db)):
     )
 
     return ClinicalSummaryResponse(**summary)
+
+
+@app.post("/generate-ai-explainer", response_model=DetailedReportResponse, tags=["Summary"])
+def generate_ai_explainer(body: DetailedReportRequest, db: Session = Depends(get_db)):
+    # Authenticate via patient check
+    _get_patient_or_404(body.patient_id, db)
+    
+    report_text = generate_detailed_ai_report(
+        patient_id=body.patient_id,
+        disease_name=body.disease_name,
+        deviations=body.deviations
+    )
+    return DetailedReportResponse(report_text=report_text)
 
 
 # ─── History ────────────────────────────────────────────────────────────────────

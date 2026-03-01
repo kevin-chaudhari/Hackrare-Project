@@ -8,7 +8,7 @@ from datetime import datetime
 
 class PatientCreate(BaseModel):
     id: str = Field(..., description="Unique patient identifier (UUID or alias)")
-    disease: Literal["ENS", "EDS", "POTS", "Heterotaxy", "PCD"]
+    disease: str = Field(..., description="Disease abbreviation or identifier")
 
 class PatientResponse(BaseModel):
     id: str
@@ -148,6 +148,14 @@ class ClinicalSummaryResponse(BaseModel):
     structured_text: str
     is_ai_generated: bool = False
 
+
+class DetailedReportRequest(BaseModel):
+    patient_id: str
+    disease_name: str
+    deviations: List[str]
+
+class DetailedReportResponse(BaseModel):
+    report_text: str
 
 # ─── History ─────────────────────────────────────────────────────────────────
 

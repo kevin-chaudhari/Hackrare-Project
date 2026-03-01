@@ -23,7 +23,7 @@ import torch.nn.functional as F
 from typing import Dict, Optional, Tuple
 
 # ─── Disease mapping ──────────────────────────────────────────────────────────
-DISEASE_TO_IDX = {"ENS": 0, "EDS": 1, "POTS": 2, "Heterotaxy": 3, "PCD": 4, "FMF": 5}
+DISEASE_TO_IDX = {"ENS": 0, "EDS": 1, "POTS": 2, "Heterotaxy": 3, "PCD": 4, "FMF": 5, "CF": 6, "HD": 7, "RTT": 8, "MFS": 9, "SMA": 10, "FXS": 11, "NF1": 12, "PKU": 13, "WD": 14, "Pompe": 15, "TS": 16, "Gaucher": 17, "Alkaptonuria": 18, "Achondroplasia": 19, "RRP": 20, "PRION": 21}
 RISK_TO_IDX = {"LOW": 0, "MODERATE": 1, "HIGH": 2, "CRITICAL": 3}
 IDX_TO_RISK = {v: k for k, v in RISK_TO_IDX.items()}
 
@@ -86,7 +86,9 @@ class RareSignalModel(nn.Module):
     def __init__(
         self,
         symptom_dim: int = 10,
-        n_diseases: int = 6,
+        trigger_vocab: int = 10,
+        hpo_vocab: int = 50,
+        n_diseases: int = 22,
         hidden: int = 64,
         lstm_layers: int = 2,
         n_heads: int = 4,
@@ -94,6 +96,8 @@ class RareSignalModel(nn.Module):
     ):
         super().__init__()
         self.symptom_dim = symptom_dim
+        self.trigger_vocab = trigger_vocab
+        self.hpo_vocab = hpo_vocab
         self.hidden = hidden
 
         # 1. Input projection
@@ -145,8 +149,15 @@ class RareSignalModel(nn.Module):
         # 7. Disease embedding
         self.disease_embedding = nn.Embedding(n_diseases, 16)
 
+        # 7.5 Phenotype / HPO Multi-hot embedding projection
+        self.hpo_projection = nn.Sequential(
+            nn.Linear(hpo_vocab, 32),
+            nn.ReLU(),
+            nn.Dropout(dropout * 0.5)
+        )
+
         # 8. Signal fusion layer
-        fusion_in = hidden * 2 + 32 + 32 + 16 + 16
+        fusion_in = hidden * 2 + 32 + 32 + 16 + 16 + 32
         self.fusion = nn.Sequential(
             nn.Linear(fusion_in, 256),
             nn.LayerNorm(256),
@@ -179,6 +190,7 @@ class RareSignalModel(nn.Module):
         trigger_ids: torch.Tensor,     # [B, max_triggers] — padded trigger indices
         vol_feats: torch.Tensor,       # [B, 3] — [rolling_std, cv, apen]
         disease_ids: torch.Tensor,     # [B] — disease index
+        hpo_multihot: torch.Tensor,    # [B, hpo_vocab] — encoded phenotypes
         src_key_padding_mask: Optional[torch.Tensor] = None  # [B, T] True = pad
     ) -> Dict[str, torch.Tensor]:
 
@@ -210,9 +222,12 @@ class RareSignalModel(nn.Module):
         # ── Disease embedding
         disease_feat = self.disease_embedding(disease_ids)         # [B, 16]
 
+        # ── HPO / Phenotype projection
+        hpo_feat = self.hpo_projection(hpo_multihot)               # [B, 32]
+
         # ── Fusion
         fused = torch.cat([
-            temporal_feat, base_feat, trig_feat, vol_feat, disease_feat
+            temporal_feat, base_feat, trig_feat, vol_feat, disease_feat, hpo_feat
         ], dim=-1)                                                  # [B, fusion_in]
         hidden = self.fusion(fused)                                 # [B, 128]
 
@@ -231,6 +246,7 @@ class RareSignalModel(nn.Module):
         trigger_ids: torch.Tensor,
         vol_feats: torch.Tensor,
         disease_ids: torch.Tensor,
+        hpo_multihot: torch.Tensor,
         n_samples: int = 50
     ) -> Dict:
         """
@@ -244,7 +260,7 @@ class RareSignalModel(nn.Module):
         forecast_samples = []
 
         for _ in range(n_samples):
-            out = self(x_seq, baseline_feats, trigger_ids, vol_feats, disease_ids)
+            out = self(x_seq, baseline_feats, trigger_ids, vol_feats, disease_ids, hpo_multihot)
             risk_samples.append(torch.softmax(out["risk_logits"], dim=-1))
             fis_samples.append(out["fis_scores"])
             forecast_samples.append(out["forecast"])
@@ -299,7 +315,8 @@ def build_model(disease: str = "POTS") -> RareSignalModel:
     return RareSignalModel(
         symptom_dim=n_symptoms,
         trigger_vocab=n_triggers,
-        n_diseases=6,
+        hpo_vocab=50,
+        n_diseases=22,
         hidden=64,
         lstm_layers=2,
         n_heads=4,

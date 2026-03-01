@@ -26,6 +26,9 @@ export const predictRisk = (patientId) =>
 export const generateSummary = (patientId, windowDays = 7) =>
   api.post('/generate-summary', { patient_id: patientId, window_days: windowDays });
 
+export const generateAiExplainer = (patientId, diseaseName, deviations) =>
+  api.post('/generate-ai-explainer', { patient_id: patientId, disease_name: diseaseName, deviations });
+
 export const getHistory = (patientId) =>
   api.get(`/patients/${patientId}/history`);
 
